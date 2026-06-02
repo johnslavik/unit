@@ -1,0 +1,7 @@
+build/
+CMakeCache.txt
+cmake_install.cmake
+compile_flags.txt
+output
+*.o
+CMakeFiles/
