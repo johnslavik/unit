@@ -31,7 +31,7 @@ _UNIT_SizeSet_New(UNIT_Context *context, UNIT_Size inital_capacity)
 _UNIT_Structure_CLEAR_AND_FREE(_UNIT_SizeSet)
 
 int8_t
-_UNIT_SizeSet_Contains(_UNIT_SizeSet *size_set, UNIT_Size value);
+_UNIT_SizeSet_Contains(const _UNIT_SizeSet *size_set, UNIT_Size value);
 
 UNIT_Status
 _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value);

@@ -195,6 +195,6 @@ _Static_assert(sizeof(ELF_RelocationAddend) == 24,
                "ELF_RelocationAddend must be 24 bytes");
 
 UNIT_Status
-_UNIT_ELF_WriteObjectFile(_UNIT_CompileContext *context, const char *path);
+_UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path);
 
 #endif

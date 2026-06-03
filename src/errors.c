@@ -21,7 +21,7 @@ UNIT_ErrorCode_ToString(UNIT_ErrorCode code)
 }
 
 UNIT_ErrorCode
-UNIT_Error_GetCode(UNIT_Context *context)
+UNIT_Error_GetCode(const UNIT_Context *context)
 {
     assert(context != NULL);
     return context->_internal.error.code;
@@ -36,14 +36,14 @@ UNIT_Error_Clear(UNIT_Context *context)
 }
 
 const char *
-UNIT_GetErrorMessage(UNIT_Context *context)
+UNIT_GetErrorMessage(const UNIT_Context *context)
 {
     assert(context != NULL);
     return context->_internal.error.message;
 }
 
 void
-UNIT_Error_Print(UNIT_Context *context, FILE *stream)
+UNIT_Error_Print(const UNIT_Context *context, FILE *stream)
 {
     assert(context != NULL);
     assert(stream != NULL);

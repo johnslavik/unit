@@ -93,7 +93,7 @@ _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value)
 }
 
 int8_t
-_UNIT_SizeSet_Contains(_UNIT_SizeSet *size_set, UNIT_Size value)
+_UNIT_SizeSet_Contains(const _UNIT_SizeSet *size_set, UNIT_Size value)
 {
     assert(size_set != NULL);
     UNIT_Size index = (UNIT_Size)(value & (uint64_t)(size_set->capacity - 1));

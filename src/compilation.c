@@ -46,7 +46,7 @@ _UNIT_Relocation_Free(UNIT_Context *context, _UNIT_Relocation *relocation)
 
 UNIT_Status
 _UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table, UNIT_Context *context,
-                       _UNIT_Vector *names)
+                       const _UNIT_Vector *names)
 {
     assert(symbol_table != NULL);
     if (UNIT_FAILED(_UNIT_Vector_Init(&symbol_table->relocations, context, 16, _UNIT_Dealloc))) {
@@ -139,7 +139,7 @@ _UNIT_StringData_Clear(_UNIT_StringData *string_data)
 UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
-                          _UNIT_Vector *symbol_names)
+                          const _UNIT_Vector *symbol_names)
 {
     assert(context != NULL);
     compile_context->context = context;
@@ -183,7 +183,7 @@ _UNIT_CompileContext_Clear(_UNIT_CompileContext *context)
 }
 
 static UNIT_Status
-build_constant_data(_UNIT_StringData *string_data, _UNIT_Vector *strings)
+build_constant_data(_UNIT_StringData *string_data, const _UNIT_Vector *strings)
 {
     UNIT_Size count = _UNIT_Vector_SIZE(strings);
 
@@ -230,7 +230,7 @@ UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled)
 
 
 UNIT_CompiledProcedure *
-UNIT_Compile(UNIT_Procedure *procedure, UNIT_Architecture architecture)
+UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
 {
     assert(procedure != NULL);
     UNIT_Context *context = procedure->context;
@@ -284,7 +284,7 @@ error:
 }
 
 UNIT_Status
-UNIT_CompiledProcedure_WriteObjectFile(UNIT_CompiledProcedure *compiled,
+UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
                                        const char *path,
                                        UNIT_ExecutableFormat format)
 {

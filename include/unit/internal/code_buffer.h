@@ -33,7 +33,7 @@ UNIT_Status
 _UNIT_CodeBuffer_Emit64(_UNIT_CodeBuffer *buffer, uint64_t value);
 
 static inline UNIT_Size
-_UNIT_CodeBuffer_CurrentIndex(_UNIT_CodeBuffer *buffer)
+_UNIT_CodeBuffer_CurrentIndex(const _UNIT_CodeBuffer *buffer)
 {
     assert(buffer != NULL);
     assert(buffer->size >= 0);

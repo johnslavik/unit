@@ -30,14 +30,14 @@ _UNIT_Relocation_Free(UNIT_Context *context, _UNIT_Relocation *relocation);
 
 typedef struct {
     /* Contains index -> `char *` (heap allocated). */
-    _UNIT_Vector *names;
+    const _UNIT_Vector *names;
     /* Contains `_UNIT_PendingJump *` */
     _UNIT_Vector relocations;
 } _UNIT_SymbolTable;
 
 UNIT_Status
 _UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table, UNIT_Context *context,
-                       _UNIT_Vector *names);
+                       const _UNIT_Vector *names);
 
 void
 _UNIT_SymbolTable_Clear(_UNIT_SymbolTable *symbol_table);
@@ -94,7 +94,7 @@ typedef struct {
 UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
-                          _UNIT_Vector *symbol_names);
+                          const _UNIT_Vector *symbol_names);
 
 void
 _UNIT_CompileContext_Clear(_UNIT_CompileContext *compile_context);

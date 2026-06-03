@@ -195,7 +195,7 @@ print_instruction_stream(_UNIT_Vector *instructions)
 }
 
 void
-_UNIT_Translation_PrintInstructions(_UNIT_Translation *translation)
+_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation)
 {
     assert(translation != NULL);
     UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
@@ -242,7 +242,7 @@ new_machine_item(_UNIT_Translation *translation, _UNIT_MachineItem_Type type,
 }
 
 static UNIT_JumpLabel *
-get_jump_label(UNIT_Procedure *procedure, int32_t id)
+get_jump_label(const UNIT_Procedure *procedure, int32_t id)
 {
     assert(procedure != NULL);
     assert(id >= 0);
@@ -252,7 +252,7 @@ get_jump_label(UNIT_Procedure *procedure, int32_t id)
 }
 
 static _UNIT_MachineItem *
-get_jump_target_item(_UNIT_Translation *translation, UNIT_Procedure *procedure,
+get_jump_target_item(_UNIT_Translation *translation, const UNIT_Procedure *procedure,
                      int32_t id, UNIT_JumpLabel **jump_label_ptr)
 {
     UNIT_JumpLabel *label = get_jump_label(procedure, id);
@@ -509,7 +509,7 @@ push_new_block(_UNIT_Translation *translation, UNIT_Size *block_id)
 
 // Eagerly create basic blocks for every jump label.
 UNIT_Status
-create_jump_label_blocks(UNIT_Context *context, _UNIT_Vector *jump_labels)
+create_jump_label_blocks(UNIT_Context *context, const _UNIT_Vector *jump_labels)
 {
     assert(jump_labels != NULL);
     UNIT_Size block_id = 0;
@@ -617,7 +617,7 @@ _UNIT_LocalVariables_Clear(_UNIT_LocalVariables *locals)
 
 UNIT_Status
 _UNIT_Translate(_UNIT_Translation *translation,
-                UNIT_Procedure *procedure)
+                const UNIT_Procedure *procedure)
 {
     assert(translation != NULL);
     assert(procedure != NULL);

@@ -98,7 +98,7 @@ _UNIT_SizeMap_Set(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size value)
 }
 
 UNIT_Status
-_UNIT_SizeMap_Get(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size *value)
+_UNIT_SizeMap_Get(const _UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size *value)
 {
     assert(size_map != NULL);
     UNIT_Size index = (UNIT_Size)(key & (uint64_t)(size_map->capacity - 1));

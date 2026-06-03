@@ -27,10 +27,10 @@ typedef struct {
 } UNIT_CompiledProcedure;
 
 UNIT_CompiledProcedure *
-UNIT_Compile(UNIT_Procedure *procedure, UNIT_Architecture arch);
+UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture arch);
 
 UNIT_Status
-UNIT_CompiledProcedure_WriteObjectFile(UNIT_CompiledProcedure *compiled,
+UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
                                        const char *path,
                                        UNIT_ExecutableFormat format);
 

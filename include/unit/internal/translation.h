@@ -90,7 +90,7 @@ typedef struct {
 
 UNIT_Status
 _UNIT_Translate(_UNIT_Translation *translation,
-                UNIT_Procedure *procedure);
+                const UNIT_Procedure *procedure);
 
 void
 _UNIT_Translation_Clear(_UNIT_Translation *translation);
@@ -99,6 +99,6 @@ UNIT_Status
 _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation, int8_t num_registers);
 
 void
-_UNIT_Translation_PrintInstructions(_UNIT_Translation *translation);
+_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation);
 
 #endif

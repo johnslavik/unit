@@ -29,13 +29,13 @@ UNIT_Status
 _UNIT_SizeVector_Append(_UNIT_SizeVector *size_vector, UNIT_Size item);
 
 static inline UNIT_Size
-_UNIT_SizeVector_SIZE(_UNIT_SizeVector *size_vector)
+_UNIT_SizeVector_SIZE(const _UNIT_SizeVector *size_vector)
 {
     return size_vector->length;
 }
 
 static inline UNIT_Size
-_UNIT_SizeVector_GET(_UNIT_SizeVector *size_vector, UNIT_Size index)
+_UNIT_SizeVector_GET(const _UNIT_SizeVector *size_vector, UNIT_Size index)
 {
     assert(size_vector != NULL);
     assert(index >= 0);

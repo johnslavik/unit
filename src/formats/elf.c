@@ -93,8 +93,8 @@ typedef struct {
     _UNIT_Vector symbols;
     _UNIT_Vector string_table;
     _UNIT_Vector relocations_table;
-    _UNIT_CodeBuffer *text;
-    _UNIT_CodeBuffer *constant_data;
+    const _UNIT_CodeBuffer *text;
+    const _UNIT_CodeBuffer *constant_data;
     const char *section_string_table;
     UNIT_Size section_string_table_size;
     _UNIT_SizeMap symtab_indices;
@@ -222,10 +222,10 @@ add_start_symbol(_UNIT_ELF_Object *object)
  * relocations can reference them. */
 static UNIT_Status
 add_external_symbols(_UNIT_ELF_Object *object,
-                     _UNIT_CompileContext *compile_context)
+                     const _UNIT_CompileContext *compile_context)
 {
     UNIT_Size symtab_index = _UNIT_Vector_SIZE(&object->symbols);
-    _UNIT_Vector *symbol_names = compile_context->symbol_table.names;
+    const _UNIT_Vector *symbol_names = compile_context->symbol_table.names;
 
     UNIT_Size size = _UNIT_Vector_SIZE(symbol_names);
     for (UNIT_Size index = 0; index < size; ++index) {
@@ -257,9 +257,9 @@ add_external_symbols(_UNIT_ELF_Object *object,
  * .rodata section symbol (index 1). */
 static UNIT_Status
 build_relocation_table(_UNIT_ELF_Object *object,
-                       _UNIT_CompileContext *compile_context)
+                       const _UNIT_CompileContext *compile_context)
 {
-    _UNIT_Vector *relocations = &compile_context->symbol_table.relocations;
+    const _UNIT_Vector *relocations = &compile_context->symbol_table.relocations;
     UNIT_Size count = _UNIT_Vector_SIZE(relocations);
 
     for (UNIT_Size index = 0; index < count; ++index) {
@@ -300,7 +300,7 @@ build_relocation_table(_UNIT_ELF_Object *object,
  * each section based on the sizes of all preceding sections. */
 static void
 build_section_headers(_UNIT_ELF_Object *object,
-                      _UNIT_CompileContext *compile_context)
+                      const _UNIT_CompileContext *compile_context)
 {
     UNIT_Size header_size = sizeof(ELF_Header);
 
@@ -386,7 +386,7 @@ build_section_headers(_UNIT_ELF_Object *object,
 }
 
 static UNIT_Status
-build_symbol_table(_UNIT_ELF_Object *object, _UNIT_CompileContext *context)
+build_symbol_table(_UNIT_ELF_Object *object, const _UNIT_CompileContext *context)
 {
     if (UNIT_FAILED(add_null_symbol(object))) {
         return UNIT_FAIL;
@@ -409,7 +409,7 @@ build_symbol_table(_UNIT_ELF_Object *object, _UNIT_CompileContext *context)
 
 static void
 populate_elf_data(_UNIT_ELF_Object *object,
-                  _UNIT_CompileContext *compile_context)
+                  const _UNIT_CompileContext *compile_context)
 {
     object->constant_data = &compile_context->string_data.constant_buffer;
     object->header = (ELF_Header) {
@@ -441,7 +441,7 @@ populate_elf_data(_UNIT_ELF_Object *object,
  * headers, symbol table, string tables, and relocation entries.
  * Does not write anything to disk. */
 static UNIT_Status
-build_elf_object(_UNIT_ELF_Object *object, _UNIT_CompileContext *compile_context)
+build_elf_object(_UNIT_ELF_Object *object, const _UNIT_CompileContext *compile_context)
 {
     assert(object != NULL);
     assert(compile_context != NULL);
@@ -499,7 +499,7 @@ error:
 }
 
 static UNIT_Status
-write_object_to_file(_UNIT_ELF_Object *object, const char *path)
+write_object_to_file(const _UNIT_ELF_Object *object, const char *path)
 {
     FILE *file = fopen(path, "wb");
     if (!file) {
@@ -552,7 +552,7 @@ write_object_to_file(_UNIT_ELF_Object *object, const char *path)
 }
 
 UNIT_Status
-_UNIT_ELF_WriteObjectFile(_UNIT_CompileContext *context, const char *path)
+_UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path)
 {
     assert(context != NULL);
     assert(path != NULL);

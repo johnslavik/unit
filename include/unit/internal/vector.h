@@ -35,13 +35,13 @@ void *
 _UNIT_Vector_Pop(_UNIT_Vector *vector);
 
 static inline UNIT_Size
-_UNIT_Vector_SIZE(_UNIT_Vector *vector)
+_UNIT_Vector_SIZE(const _UNIT_Vector *vector)
 {
     return vector->length;
 }
 
 static inline void *
-_UNIT_Vector_GET(_UNIT_Vector *vector, UNIT_Size index)
+_UNIT_Vector_GET(const _UNIT_Vector *vector, UNIT_Size index)
 {
     assert(vector != NULL);
     assert(index >= 0);
@@ -50,6 +50,8 @@ _UNIT_Vector_GET(_UNIT_Vector *vector, UNIT_Size index)
     return vector->items[index];
 }
 
+/* Like _UNIT_Vector_Append(), but does not attempt to resize.
+ * Only use if you're certain that the vector is big enough. */
 static inline void
 _UNIT_Vector_APPEND(_UNIT_Vector *vector, void *item)
 {

@@ -35,10 +35,10 @@ UNIT_Status
 _UNIT_SizeMap_Set(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size value);
 
 UNIT_Status
-_UNIT_SizeMap_Get(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size *value);
+_UNIT_SizeMap_Get(const _UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size *value);
 
 static inline UNIT_Size
-_UNIT_SizeMap_GET(_UNIT_SizeMap *size_map, UNIT_Size key)
+_UNIT_SizeMap_GET(const _UNIT_SizeMap *size_map, UNIT_Size key)
 {
     UNIT_Size value;
     UNIT_Status status = _UNIT_SizeMap_Get(size_map, key, &value);

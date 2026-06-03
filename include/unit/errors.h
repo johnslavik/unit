@@ -6,16 +6,16 @@
 #include <unit/context.h>
 
 UNIT_ErrorCode
-UNIT_Error_GetCode(UNIT_Context *context);
+UNIT_Error_GetCode(const UNIT_Context *context);
 
 void
 UNIT_Error_Clear(UNIT_Context *context);
 
 const char *
-UNIT_Error_GetMessage(UNIT_Context *context);
+UNIT_Error_GetMessage(const UNIT_Context *context);
 
 void
-UNIT_Error_Print(UNIT_Context *context, FILE *stream);
+UNIT_Error_Print(const UNIT_Context *context, FILE *stream);
 
 void
 _UNIT_SetError(UNIT_Context *context, UNIT_ErrorCode code, const char *message);
