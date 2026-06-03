@@ -3,33 +3,33 @@
 
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
-#include <unit/internal/architectures/x86_64.h>
+#include <unit/internal/architectures/amd64.h>
 
-_UNIT_X86_64_Operand
-reg(_UNIT_X86_64_Register r) {
-    return (_UNIT_X86_64_Operand) {
+_UNIT_AMD64_Operand
+reg(_UNIT_AMD64_Register r) {
+    return (_UNIT_AMD64_Operand) {
         .kind = OPERAND_REGISTER,
         .reg = r
     };
 }
 
-_UNIT_X86_64_Operand
+_UNIT_AMD64_Operand
 immediate(uint64_t value) {
-    return (_UNIT_X86_64_Operand) {
+    return (_UNIT_AMD64_Operand) {
         .kind = OPERAND_IMMEDIATE,
         .immediate = value
     };
 }
 
-_UNIT_X86_64_Operand
+_UNIT_AMD64_Operand
 stack_slot(uint64_t offset) {
-    return (_UNIT_X86_64_Operand) {
+    return (_UNIT_AMD64_Operand) {
         .kind = OPERAND_STACK,
         .immediate = offset
     };
 }
 
-static const _UNIT_X86_64_Register register_map[] = {
+static const _UNIT_AMD64_Register register_map[] = {
     REG_RAX,
     REG_RCX,
     REG_RDX,
@@ -40,7 +40,7 @@ static const _UNIT_X86_64_Register register_map[] = {
     REG_R10,
 };
 
-_UNIT_X86_64_Operand
+_UNIT_AMD64_Operand
 machine_item_to_operand(_UNIT_MachineItem *machine_item)
 {
     assert(machine_item != NULL);
@@ -58,10 +58,10 @@ machine_item_to_operand(_UNIT_MachineItem *machine_item)
 }
 
 #define SRC_DEST_HELPER(name, opcode_name)                                                      \
-    static inline _UNIT_X86_64_Instruction *                                                    \
-    name(UNIT_Context *context, _UNIT_X86_64_Operand dst, _UNIT_X86_64_Operand src) {           \
-        _UNIT_X86_64_Instruction *instruction = _UNIT_Alloc(context,                            \
-                                                            sizeof(_UNIT_X86_64_Instruction));  \
+    static inline _UNIT_AMD64_Instruction *                                                    \
+    name(UNIT_Context *context, _UNIT_AMD64_Operand dst, _UNIT_AMD64_Operand src) {           \
+        _UNIT_AMD64_Instruction *instruction = _UNIT_Alloc(context,                            \
+                                                            sizeof(_UNIT_AMD64_Instruction));  \
         if (instruction == NULL) {                                                              \
             return NULL;                                                                        \
         }                                                                                       \
@@ -73,10 +73,10 @@ machine_item_to_operand(_UNIT_MachineItem *machine_item)
     }
 
 #define NO_ARGS_HELPER(name, opcode_name)                                                       \
-    static inline _UNIT_X86_64_Instruction *                                                    \
+    static inline _UNIT_AMD64_Instruction *                                                    \
     name(UNIT_Context *context) {                                                               \
-        _UNIT_X86_64_Instruction *instruction = _UNIT_Alloc(context,                            \
-                                                            sizeof(_UNIT_X86_64_Instruction));  \
+        _UNIT_AMD64_Instruction *instruction = _UNIT_Alloc(context,                            \
+                                                            sizeof(_UNIT_AMD64_Instruction));  \
         if (instruction == NULL) {                                                              \
             return NULL;                                                                        \
         }                                                                                       \
@@ -86,10 +86,10 @@ machine_item_to_operand(_UNIT_MachineItem *machine_item)
     }
 
 #define SINGLE_OPERAND_HELPER(name, opcode_name)                                                \
-    static inline _UNIT_X86_64_Instruction *                                                    \
-    name(UNIT_Context *context, _UNIT_X86_64_Operand operand) {                                 \
-        _UNIT_X86_64_Instruction *instruction = _UNIT_Alloc(context,                            \
-                                                            sizeof(_UNIT_X86_64_Instruction));  \
+    static inline _UNIT_AMD64_Instruction *                                                    \
+    name(UNIT_Context *context, _UNIT_AMD64_Operand operand) {                                 \
+        _UNIT_AMD64_Instruction *instruction = _UNIT_Alloc(context,                            \
+                                                            sizeof(_UNIT_AMD64_Instruction));  \
         if (instruction == NULL) {                                                              \
             return NULL;                                                                        \
         }                                                                                       \
@@ -99,26 +99,26 @@ machine_item_to_operand(_UNIT_MachineItem *machine_item)
         return instruction;                                                                     \
     }
 
-SRC_DEST_HELPER(mov, X86_64_MOV)
-SRC_DEST_HELPER(add, X86_64_ADD)
-SRC_DEST_HELPER(sub, X86_64_SUB)
-NO_ARGS_HELPER(ret, X86_64_RET)
-NO_ARGS_HELPER(syscall, X86_64_SYSCALL)
-SINGLE_OPERAND_HELPER(call_indirect, X86_64_CALL_INDIRECT)
-SINGLE_OPERAND_HELPER(call_symbol, X86_64_CALL_SYMBOL)
-SINGLE_OPERAND_HELPER(jmp, X86_64_JUMP)
-SINGLE_OPERAND_HELPER(_jmp_label, X86_64_JUMP_LABEL)
-SINGLE_OPERAND_HELPER(jump_if_equal, X86_64_JUMP_IF_EQUAL)
-SINGLE_OPERAND_HELPER(jump_if_not_equal, X86_64_JUMP_IF_NOT_EQUAL)
-SINGLE_OPERAND_HELPER(jump_if_greater, X86_64_JUMP_IF_GREATER)
-SINGLE_OPERAND_HELPER(jump_if_less, X86_64_JUMP_IF_LESS)
-SINGLE_OPERAND_HELPER(jump_if_greater_equal, X86_64_JUMP_IF_GREATER_EQUAL)
-SINGLE_OPERAND_HELPER(jump_if_less_equal, X86_64_JUMP_IF_LESS_EQUAL)
-SRC_DEST_HELPER(load_string, X86_64_LOAD_STRING)
-SRC_DEST_HELPER(cmp, X86_64_COMPARE)
-SRC_DEST_HELPER(lea, X86_64_LOAD_ADDRESS)
+SRC_DEST_HELPER(mov, AMD64_MOV)
+SRC_DEST_HELPER(add, AMD64_ADD)
+SRC_DEST_HELPER(sub, AMD64_SUB)
+NO_ARGS_HELPER(ret, AMD64_RET)
+NO_ARGS_HELPER(syscall, AMD64_SYSCALL)
+SINGLE_OPERAND_HELPER(call_indirect, AMD64_CALL_INDIRECT)
+SINGLE_OPERAND_HELPER(call_symbol, AMD64_CALL_SYMBOL)
+SINGLE_OPERAND_HELPER(jmp, AMD64_JUMP)
+SINGLE_OPERAND_HELPER(_jmp_label, AMD64_JUMP_LABEL)
+SINGLE_OPERAND_HELPER(jump_if_equal, AMD64_JUMP_IF_EQUAL)
+SINGLE_OPERAND_HELPER(jump_if_not_equal, AMD64_JUMP_IF_NOT_EQUAL)
+SINGLE_OPERAND_HELPER(jump_if_greater, AMD64_JUMP_IF_GREATER)
+SINGLE_OPERAND_HELPER(jump_if_less, AMD64_JUMP_IF_LESS)
+SINGLE_OPERAND_HELPER(jump_if_greater_equal, AMD64_JUMP_IF_GREATER_EQUAL)
+SINGLE_OPERAND_HELPER(jump_if_less_equal, AMD64_JUMP_IF_LESS_EQUAL)
+SRC_DEST_HELPER(load_string, AMD64_LOAD_STRING)
+SRC_DEST_HELPER(cmp, AMD64_COMPARE)
+SRC_DEST_HELPER(lea, AMD64_LOAD_ADDRESS)
 
-static const _UNIT_X86_64_Register argument_registers[] = {
+static const _UNIT_AMD64_Register argument_registers[] = {
     REG_RDI,
     REG_RSI,
     REG_RDX,
@@ -128,7 +128,7 @@ static const _UNIT_X86_64_Register argument_registers[] = {
 };
 
 #define EMIT(op)                                                             \
-    if (UNIT_FAILED(_UNIT_X86_64_encode_instruction(compile_context, op))) { \
+    if (UNIT_FAILED(_UNIT_AMD64_encode_instruction(compile_context, op))) { \
         return UNIT_FAIL;                                                    \
     }
 
@@ -163,14 +163,14 @@ translate_operation(_UNIT_CompileContext *compile_context,
             UNIT_Size save_slots[6];
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
                 save_slots[argument] = _UNIT_CompileContext_AllocateStackSlot(compile_context);
-                _UNIT_X86_64_Register argument_register = argument_registers[argument];
+                _UNIT_AMD64_Register argument_register = argument_registers[argument];
                 EMIT(mov(ctx, stack_slot(save_slots[argument]), reg(argument_register)));
             }
 
             // Set up arguments
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
-                _UNIT_X86_64_Register argument_register = argument_registers[argument];
-                _UNIT_X86_64_Operand value = machine_item_to_operand(
+                _UNIT_AMD64_Register argument_register = argument_registers[argument];
+                _UNIT_AMD64_Operand value = machine_item_to_operand(
                     _UNIT_Vector_GET(arguments, argument)
                 );
                 EMIT(mov(ctx, reg(argument_register), value));
@@ -182,7 +182,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             // Restore argument registers from stack frame slots
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
-                _UNIT_X86_64_Register argument_register = argument_registers[argument];
+                _UNIT_AMD64_Register argument_register = argument_registers[argument];
                 EMIT(mov(ctx, reg(argument_register), stack_slot(save_slots[argument])));
             }
 
@@ -271,7 +271,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
 }
 
 UNIT_Status
-_UNIT_X86_64_FromTranslation(_UNIT_Translation *translation,
+_UNIT_AMD64_FromTranslation(_UNIT_Translation *translation,
                              _UNIT_CompileContext *compile_context)
 {
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
@@ -309,7 +309,7 @@ _UNIT_X86_64_FromTranslation(_UNIT_Translation *translation,
     }
     EMIT(ret(ctx));
 
-    _UNIT_X86_64_PatchPrologue(compile_context, prologue_offset);
-    _UNIT_X86_64_PatchJumps(compile_context);
+    _UNIT_AMD64_PatchPrologue(compile_context, prologue_offset);
+    _UNIT_AMD64_PatchJumps(compile_context);
     return UNIT_OK;
 }

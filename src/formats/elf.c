@@ -60,14 +60,14 @@
 //     relocations reference) and sh_info points to .text (which
 //     section the relocations patch).
 //
-//   - Relocations use R_X86_64_PLT32 for function calls. The
+//   - Relocations use R_AMD64_PLT32 for function calls. The
 //     linker computes: S + A - P, where S is the symbol address,
 //     A is the addend (-4, to account for the displacement being
 //     relative to the end of the instruction, not the start of
 //     the 4-byte field), and P is the patch location.
 //
 //   - String literals are stored in .rodata. Code references them
-//     via RIP-relative addressing with R_X86_64_PC32 relocations
+//     via RIP-relative addressing with R_AMD64_PC32 relocations
 //     that point at the .rodata section symbol. The addend is the
 //     offset of the string within .rodata, minus 4 (for the same
 //     reason as PLT32).
@@ -252,8 +252,8 @@ add_external_symbols(_UNIT_ELF_Object *object,
 }
 
 /* Converts our internal relocations into ELF relocations.
- * Function call relocations use R_X86_64_PLT32.
- * String/data relocations use R_X86_64_PC32 and point at the
+ * Function call relocations use R_AMD64_PLT32.
+ * String/data relocations use R_AMD64_PC32 and point at the
  * .rodata section symbol (index 1). */
 static UNIT_Status
 build_relocation_table(_UNIT_ELF_Object *object,
@@ -277,14 +277,14 @@ build_relocation_table(_UNIT_ELF_Object *object,
             UNIT_Size resolved_index = _UNIT_SizeMap_GET(&object->symtab_indices,
                                                          relocation->symbol_index);
             entry->info = ELF_RELOCATION_INFO(resolved_index,
-                                              ELF_RELOCATION_X86_64_PLT32);
+                                              ELF_RELOCATION_AMD64_PLT32);
             entry->add = -4;
         } else if (relocation->type == RELOCATION_DATA) {
             // Points at the .rodata section symbol (index 1).
             // The addend is the byte offset of the data within
             // .rodata, minus 4 for the RIP-relative adjustment.
             entry->info = ELF_RELOCATION_INFO(1,
-                                              ELF_RELOCATION_X86_64_PC32);
+                                              ELF_RELOCATION_AMD64_PC32);
             entry->add = relocation->symbol_index - 4;
         }
 
@@ -423,7 +423,7 @@ populate_elf_data(_UNIT_ELF_Object *object,
             [ELF_IDENT_VERSION] = ELF_VERSION_CURRENT,
         },
         .type = ELF_TYPE_RELOCATABLE,
-        .machine = ELF_MACHINE_X86_64,
+        .machine = ELF_MACHINE_AMD64,
         .version = ELF_VERSION_CURRENT,
         .section_header_offset = sizeof(ELF_Header),
         .header_size = sizeof(ELF_Header),

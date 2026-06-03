@@ -242,7 +242,7 @@ UNIT_CompileProcedure(UNIT_Procedure *procedure)
         goto error;
     }
 
-    if (UNIT_FAILED(_UNIT_X86_64_FromTranslation(&translation, &context))) {
+    if (UNIT_FAILED(_UNIT_AMD64_FromTranslation(&translation, &context))) {
         goto error;
     }
 

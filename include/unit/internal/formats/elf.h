@@ -58,7 +58,7 @@ enum {
     ELF_MACHINE_NONE    = 0,    // EM_NONE
     ELF_MACHINE_386     = 3,    // EM_386
     ELF_MACHINE_ARM     = 40,   // EM_ARM
-    ELF_MACHINE_X86_64  = 62,   // EM_X86_64
+    ELF_MACHINE_AMD64  = 62,   // EM_AMD64
     ELF_MACHINE_AARCH64 = 183,  // EM_AARCH64
 };
 
@@ -114,12 +114,12 @@ enum {
     (((binding) << 4) | ((type) & 0xf))
 
 
-// Relocation types (x86_64)
+// Relocation types (AMD64)
 enum {
-    ELF_RELOCATION_X86_64_NONE   = 0,   // R_X86_64_NONE
-    ELF_RELOCATION_X86_64_64     = 1,   // R_X86_64_64
-    ELF_RELOCATION_X86_64_PC32   = 2,   // R_X86_64_PC32
-    ELF_RELOCATION_X86_64_PLT32  = 4,   // R_X86_64_PLT32
+    ELF_RELOCATION_AMD64_NONE   = 0,   // R_AMD64_NONE
+    ELF_RELOCATION_AMD64_64     = 1,   // R_AMD64_64
+    ELF_RELOCATION_AMD64_PC32   = 2,   // R_AMD64_PC32
+    ELF_RELOCATION_AMD64_PLT32  = 4,   // R_AMD64_PLT32
 };
 
 
