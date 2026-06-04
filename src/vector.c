@@ -64,3 +64,17 @@ _UNIT_Vector_Pop(_UNIT_Vector *vector)
     vector->items[vector->length] = NULL;
     return result;
 }
+
+void
+_UNIT_Vector_Reverse(_UNIT_Vector *vector)
+{
+    assert(vector != NULL);
+    UNIT_Size index = 0;
+    UNIT_Size end = vector->length - 1;
+
+    while (index < end) {
+        void *saved = vector->items[index];
+        vector->items[index++] = vector->items[end];
+        vector->items[end--] = saved;
+    }
+}

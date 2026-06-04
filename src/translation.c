@@ -890,6 +890,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     POP_TO_VAR(item);
                     _UNIT_Vector_APPEND(vector, item);
                 }
+                // We want arguments to be consumed from left to right
+                _UNIT_Vector_Reverse(vector);
+
                 _UNIT_MachineItem *args = _UNIT_Alloc(context, sizeof(_UNIT_MachineItem));
                 if (args == NULL) {
                     _UNIT_Vector_Free(vector);

@@ -59,4 +59,7 @@ _UNIT_Vector_APPEND(_UNIT_Vector *vector, void *item)
     vector->items[vector->length++] = item;
 }
 
+void
+_UNIT_Vector_Reverse(_UNIT_Vector *vector);
+
 #endif
