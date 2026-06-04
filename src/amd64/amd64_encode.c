@@ -386,29 +386,30 @@ error:
 
 void
 AMD64_PatchPrologue(_UNIT_CompileContext *context,
-                    UNIT_Size prologue_offset)
+                    UNIT_Size prologue_offset,
+                    UNIT_Size frame_size)
 {
-    if (context->frame_size > 0) {
-        if (context->frame_size % 16 != 0) {
-            context->frame_size += 16 - (context->frame_size % 16);
-        }
-
-        uint8_t prologue[] = {
-            rex(1, 0, 0, 0),
-            OPCODE_GROUP1_IMM32,
-            modrm(MOD_REGISTER, GROUP1_SUB, REG_RSP),
-            (context->frame_size >> 0) & 0xFF,
-            (context->frame_size >> 8) & 0xFF,
-            (context->frame_size >> 16) & 0xFF,
-            (context->frame_size >> 24) & 0xFF,
-        };
-        _UNIT_CodeBuffer_PatchBytes(&context->buffer, prologue_offset,
-                                    prologue, 7);
-    } else {
+    assert(context != NULL);
+    assert(prologue_offset >= 0);
+    assert(frame_size >= 0);
+    if (frame_size == 0) {
         uint8_t nops[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
         _UNIT_CodeBuffer_PatchBytes(&context->buffer, prologue_offset,
                                     nops, 7);
+        return;
     }
+
+    uint8_t prologue[] = {
+        rex(1, 0, 0, 0),
+        OPCODE_GROUP1_IMM32,
+        modrm(MOD_REGISTER, GROUP1_SUB, REG_RSP),
+        (frame_size >> 0) & 0xFF,
+        (frame_size >> 8) & 0xFF,
+        (frame_size >> 16) & 0xFF,
+        (frame_size >> 24) & 0xFF,
+    };
+    _UNIT_CodeBuffer_PatchBytes(&context->buffer, prologue_offset,
+                                prologue, 7);
 }
 
 void

@@ -2,8 +2,11 @@
 #define UNIT_COMPILE_CONTEXT_H
 
 #include <unit/base.h>
+#include <unit/procedure.h>
+
 #include <unit/internal/code_buffer.h>
 #include <unit/internal/size_map.h>
+#include <unit/internal/translation.h>
 #include <unit/internal/vector.h>
 
 typedef enum {
@@ -82,24 +85,40 @@ _UNIT_StringData_Init(_UNIT_StringData *string_data, UNIT_Context *context);
 void
 _UNIT_StringData_Clear(_UNIT_StringData *string_data);
 
+#define _UNIT_StackFrame_MAX_FREE_SLOTS 32
+
+typedef struct {
+    UNIT_Size next_slot;
+    UNIT_Size free_slots[_UNIT_StackFrame_MAX_FREE_SLOTS];
+    UNIT_Size free_slot_count;
+    UNIT_Size reserved_slots;
+} _UNIT_StackFrame;
+
+UNIT_Size
+_UNIT_StackFrame_AllocateSlot(_UNIT_StackFrame *frame);
+
+void
+_UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot);
+
+UNIT_Size
+_UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame);
+
 typedef struct {
     UNIT_Context *context;
     _UNIT_CodeBuffer buffer;
     _UNIT_SymbolTable symbol_table;
     _UNIT_JumpTable jump_table;
     _UNIT_StringData string_data;
-    UNIT_Size frame_size;
+    _UNIT_StackFrame stack_frame;
 } _UNIT_CompileContext;
 
 UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
-                          const _UNIT_Vector *symbol_names);
+                          const UNIT_Procedure *procedure,
+                          const _UNIT_Translation *translation);
 
 void
 _UNIT_CompileContext_Clear(_UNIT_CompileContext *compile_context);
-
-UNIT_Size
-_UNIT_CompileContext_AllocateStackSlot(_UNIT_CompileContext *compile_context);
 
 #endif

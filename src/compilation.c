@@ -136,12 +136,59 @@ _UNIT_StringData_Clear(_UNIT_StringData *string_data)
     _UNIT_CodeBuffer_Clear(&string_data->constant_buffer);
 }
 
+void
+init_stack_frame(_UNIT_StackFrame *frame, UNIT_Size reserved_slots)
+{
+    assert(frame != NULL);
+    frame->next_slot = reserved_slots;
+    frame->free_slot_count = 0;
+    frame->reserved_slots = reserved_slots;
+}
+
+UNIT_Size
+_UNIT_StackFrame_AllocateSlot(_UNIT_StackFrame *frame)
+{
+    assert(frame != NULL);
+    assert(frame->free_slot_count < _UNIT_StackFrame_MAX_FREE_SLOTS);
+    if (frame->free_slot_count > 0) {
+        return frame->free_slots[--frame->free_slot_count];
+    }
+    return frame->next_slot++;
+}
+
+void
+_UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot)
+{
+    assert(frame != NULL);
+    assert(slot >= frame->reserved_slots);  // can't free memory variable slots
+    assert(frame->free_slot_count < _UNIT_StackFrame_MAX_FREE_SLOTS);
+    frame->free_slots[frame->free_slot_count++] = slot;
+}
+
+UNIT_Size
+_UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame)
+{
+    assert(frame != NULL);
+    UNIT_Size size = frame->next_slot * 8;
+    assert(size >= 0);
+    if (size > 0 && size % 16 != 0) {
+        size += 16 - (size % 16);
+    }
+    assert(size % 16 == 0);
+    return size;
+}
+
 UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
-                          const _UNIT_Vector *symbol_names)
+                          const UNIT_Procedure *procedure,
+                          const _UNIT_Translation *translation)
 {
+    assert(compile_context != NULL);
     assert(context != NULL);
+    assert(procedure != NULL);
+    assert(translation != NULL);
+
     compile_context->context = context;
     if (UNIT_FAILED(_UNIT_CodeBuffer_Init(&compile_context->buffer,
                                           context))) {
@@ -155,7 +202,7 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
     }
 
     if (UNIT_FAILED(_UNIT_SymbolTable_Init(&compile_context->symbol_table,
-                                           context, symbol_names))) {
+                                           context, &procedure->_symbols))) {
         _UNIT_CodeBuffer_Clear(&compile_context->buffer);
         _UNIT_StringData_Clear(&compile_context->string_data);
         return UNIT_FAIL;
@@ -168,7 +215,7 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
         return UNIT_FAIL;
     }
 
-    compile_context->frame_size = 0;
+    init_stack_frame(&compile_context->stack_frame, translation->num_memory_slots);
     return UNIT_OK;
 }
 
@@ -209,16 +256,6 @@ build_constant_data(_UNIT_StringData *string_data, const _UNIT_Vector *strings)
     return UNIT_OK;
 }
 
-UNIT_Size
-_UNIT_CompileContext_AllocateStackSlot(_UNIT_CompileContext *context)
-{
-    assert(context != NULL);
-    UNIT_Size offset = context->frame_size;
-    context->frame_size += 8;
-    return offset;
-}
-
-
 void
 UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled)
 {
@@ -246,8 +283,8 @@ UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
         return NULL;
     }
 
-    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context, procedure->context,
-                                              &procedure->_symbols))) {
+    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context, context,
+                                              procedure, &compiled_procedure->_translation))) {
         _UNIT_Translation_Clear(&compiled_procedure->_translation);
         _UNIT_Dealloc(context, compiled_procedure);
         return NULL;
