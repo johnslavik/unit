@@ -175,7 +175,7 @@ UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str)
         return UNIT_FAIL;
     }
 
-    return UNIT_Procedure_AddOperation(procedure, UNIT_OP_LOAD_CONSTANT_STRING,
+    return UNIT_Procedure_AddOperation(procedure, UNIT_OP_LOAD_STRING,
                                        index);
 }
 

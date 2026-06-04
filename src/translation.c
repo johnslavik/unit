@@ -13,8 +13,8 @@ const char *
 instruction_name(UNIT_Instruction instruction)
 {
     switch (instruction) {
-        NAME(UNIT_OP_LOAD_CONSTANT_INTEGER);
-        NAME(UNIT_OP_LOAD_CONSTANT_STRING);
+        NAME(UNIT_OP_LOAD_INTEGER);
+        NAME(UNIT_OP_LOAD_STRING);
         NAME(UNIT_OP_LOAD_LOCAL);
         NAME(UNIT_OP_STORE_LOCAL);
         NAME(UNIT_OP_ADD);
@@ -780,7 +780,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
         switch (operation->instruction) {
-            case UNIT_OP_LOAD_CONSTANT_INTEGER: {
+            case UNIT_OP_LOAD_INTEGER: {
                 PUSH_NEW(_UNIT_TYPE_CONSTANT, operation->argument);
                 break;
             }
@@ -856,7 +856,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_LOAD_CONSTANT_STRING: {
+            case UNIT_OP_LOAD_STRING: {
                 const char *text = _UNIT_Vector_GET(&procedure->_global_strings, operation->argument);
                 assert(text != NULL);
                 _UNIT_MachineItem *result = new_machine_item(translation, _UNIT_TYPE_CONSTANT,
