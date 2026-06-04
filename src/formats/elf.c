@@ -85,6 +85,7 @@
 #include <unit/internal/vector.h>
 
 #include <unit/internal/formats/elf.h>
+#include "elf_format.h"
 
 typedef struct {
     UNIT_Context *context;
