@@ -79,13 +79,14 @@
 
 #include <unit/base.h>
 #include <unit/errors.h>
+
 #include <unit/internal/code_buffer.h>
 #include <unit/internal/compile_context.h>
+#include <unit/internal/executable_formats.h>
 #include <unit/internal/size_map.h>
 #include <unit/internal/vector.h>
 
-#include <unit/internal/formats/elf.h>
-#include "elf_format.h"
+#include "elf_local.h"
 
 typedef struct {
     UNIT_Context *context;

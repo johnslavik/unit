@@ -1,5 +1,5 @@
-#ifndef UNIT_ELF_FORMAT_H
-#define UNIT_ELF_FORMAT_H
+#ifndef UNIT_ELF_LOCAL_H
+#define UNIT_ELF_LOCAL_H
 
 #include <stdint.h>
 

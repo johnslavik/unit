@@ -1,5 +1,5 @@
-#ifndef UNIT_ELF_H
-#define UNIT_ELF_H
+#ifndef UNIT_EXECUTABLE_FORMATS_H
+#define UNIT_EXECUTABLE_FORMATS_H
 
 #include <unit/internal/compile_context.h>
 

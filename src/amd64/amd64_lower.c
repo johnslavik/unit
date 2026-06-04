@@ -3,7 +3,7 @@
 
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
-#include <unit/internal/architectures/amd64.h>
+#include <unit/internal/architectures.h>
 
 #include "amd64_local.h"
 

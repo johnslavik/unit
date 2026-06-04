@@ -3,9 +3,9 @@
 #include <unit/compilation.h>
 
 #include <unit/internal/architectures.h>
-#include <unit/internal/translation.h>
-#include <unit/internal/formats/elf.h>
 #include <unit/internal/compile_context.h>
+#include <unit/internal/executable_formats.h>
+#include <unit/internal/translation.h>
 
 _UNIT_Relocation *
 new_relocation(UNIT_Context *context, UNIT_Size offset, UNIT_Size symbol_index,
