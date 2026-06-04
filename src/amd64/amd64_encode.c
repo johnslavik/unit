@@ -11,8 +11,6 @@ enum {
     OPCODE_MOV_RM64_R64  = 0x89,
     OPCODE_MOV_R64_RM64  = 0x8B,
     OPCODE_MOV_R64_IMM64 = 0xB8,
-    OPCODE_ADD_RM64_R64 = 0x01,
-    OPCODE_SUB_RM64_IMM8 = 0x83,
     OPCODE_RET = 0xc3,
     OPCODE_SYSCALL_0 = 0x0f,
     OPCODE_SYSCALL_1 = 0x05,
@@ -28,6 +26,13 @@ enum {
     OPCODE_JLE_REL32 = 0x8E,
     OPCODE_JG_REL32 = 0x8F,
     OPCODE_LEA = 0x8D,
+    OPCODE_ADD_RM64_R64 = 0x01,
+    OPCODE_SUB_RM64_IMM8 = 0x83,
+    OPCODE_SUB_RM64_R64 = 0x29,
+    OPCODE_IMUL_R64_RM64_0 = 0x0F, // imul is split into two bytes
+    OPCODE_IMUL_R64_RM64_1 = 0xAF,
+    OPCODE_IDIV_RM64 = 0xF7,
+    OPCODE_CQO = 0x99,
 };
 
 // Multi-purpose opcodes (specify the actual thing using ModRM)
@@ -219,28 +224,6 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             break;
         }
 
-        case AMD64_ADD: {
-            AMD64_Operand dst = instr->operands[0];
-            AMD64_Operand src = instr->operands[1];
-
-            // add reg, reg (src in reg field, dst in rm field)
-            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
-                EMIT_REX(src.reg, dst.reg);
-                EMIT8(OPCODE_ADD_RM64_R64);
-                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
-            }
-            // add reg, imm32 (group opcode, dst in rm field)
-            else {
-                assert(src.kind == OPERAND_IMMEDIATE);
-                assert(dst.kind == OPERAND_REGISTER);
-                EMIT_REX(0, dst.reg);
-                EMIT8(OPCODE_GROUP1_IMM32);
-                EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, reg_bits(dst.reg)));
-                EMIT32((uint32_t)src.immediate);
-            }
-            break;
-        }
-
         case AMD64_CALL_INDIRECT: {
             AMD64_Operand target = instr->operands[0];
             assert(target.kind == OPERAND_REGISTER);
@@ -373,8 +356,79 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             break;
         }
 
-        default:
-            _UNIT_Unreachable();
+        case AMD64_ADD: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+
+            // add reg, reg (src in reg field, dst in rm field)
+            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
+                EMIT_REX(src.reg, dst.reg);
+                EMIT8(OPCODE_ADD_RM64_R64);
+                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
+            }
+            // add reg, imm32 (group opcode, dst in rm field)
+            else {
+                assert(src.kind == OPERAND_IMMEDIATE);
+                assert(dst.kind == OPERAND_REGISTER);
+                EMIT_REX(0, dst.reg);
+                EMIT8(OPCODE_GROUP1_IMM32);
+                EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, reg_bits(dst.reg)));
+                EMIT32((uint32_t)src.immediate);
+            }
+            break;
+        }
+
+        case AMD64_SUB: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+
+            // sub reg, reg
+            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
+                EMIT_REX(src.reg, dst.reg);
+                EMIT8(OPCODE_SUB_RM64_R64);
+                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
+            }
+            // sub reg, imm32
+            else {
+                assert(dst.kind == OPERAND_REGISTER);
+                assert(src.kind == OPERAND_IMMEDIATE);
+                EMIT_REX(0, dst.reg);
+                EMIT8(OPCODE_GROUP1_IMM32);
+                EMIT8(modrm(MOD_REGISTER, GROUP1_SUB, reg_bits(dst.reg)));
+                EMIT32((uint32_t)src.immediate);
+            }
+            break;
+        }
+
+        case AMD64_MUL: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+
+            // imul reg, reg
+            assert(dst.kind == OPERAND_REGISTER);
+            assert(src.kind == OPERAND_REGISTER);
+            EMIT_REX(dst.reg, src.reg);
+            EMIT8(OPCODE_IMUL_R64_RM64_0);
+            EMIT8(OPCODE_IMUL_R64_RM64_1);
+            EMIT8(modrm(MOD_REGISTER, reg_bits(dst.reg), reg_bits(src.reg)));
+            break;
+        }
+
+        case AMD64_DIV: {
+            AMD64_Operand divisor = instr->operands[0];
+
+            assert(divisor.kind == OPERAND_REGISTER);
+            EMIT_REX(0, divisor.reg);
+            EMIT8(OPCODE_IDIV_RM64);
+            EMIT8(modrm(MOD_REGISTER, 7, reg_bits(divisor.reg)));
+            break;
+        }
+
+        case AMD64_CQO: {
+            EMIT8(rex(1, 0, 0, 0));
+            EMIT8(OPCODE_CQO);
+            break;
+        }
     }
 
     _UNIT_Dealloc(compile_context->context, instr);

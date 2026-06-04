@@ -61,20 +61,6 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
     }
 }
 
-#define SRC_DEST_HELPER(name, opcode_name)                                                      \
-    static inline AMD64_Instruction *                                                           \
-    name(UNIT_Context *context, AMD64_Operand dst, AMD64_Operand src) {                         \
-        AMD64_Instruction *instruction = _UNIT_Alloc(context,                                   \
-                                                     sizeof(AMD64_Instruction));                \
-        if (instruction == NULL) {                                                              \
-            return NULL;                                                                        \
-        }                                                                                       \
-        instruction->opcode = opcode_name;                                                      \
-        instruction->operands[0] = dst;                                                         \
-        instruction->operands[1] = src;                                                         \
-        instruction->operand_count = 2;                                                         \
-        return instruction;                                                                     \
-    }
 
 #define NO_ARGS_HELPER(name, opcode_name)                                                       \
     static inline AMD64_Instruction *                                                           \
@@ -89,7 +75,7 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
         return instruction;                                                                     \
     }
 
-#define SINGLE_OPERAND_HELPER(name, opcode_name)                                                \
+#define ONE_ARG_HELPER(name, opcode_name)                                                       \
     static inline AMD64_Instruction *                                                           \
     name(UNIT_Context *context, AMD64_Operand operand) {                                        \
         AMD64_Instruction *instruction = _UNIT_Alloc(context,                                   \
@@ -103,24 +89,61 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
         return instruction;                                                                     \
     }
 
-SRC_DEST_HELPER(mov, AMD64_MOV)
-SRC_DEST_HELPER(add, AMD64_ADD)
-SRC_DEST_HELPER(sub, AMD64_SUB)
+
+#define TWO_ARG_HELPER(name, opcode_name)                                                       \
+    static inline AMD64_Instruction *                                                           \
+    name(UNIT_Context *context, AMD64_Operand dst, AMD64_Operand src) {                         \
+        AMD64_Instruction *instruction = _UNIT_Alloc(context,                                   \
+                                                     sizeof(AMD64_Instruction));                \
+        if (instruction == NULL) {                                                              \
+            return NULL;                                                                        \
+        }                                                                                       \
+        instruction->opcode = opcode_name;                                                      \
+        instruction->operands[0] = dst;                                                         \
+        instruction->operands[1] = src;                                                         \
+        instruction->operand_count = 2;                                                         \
+        return instruction;                                                                     \
+    }
+
+// Not used yet but we'll probably need this eventually
+#define THREE_ARG_HELPER(name, opcode_name)                                                     \
+    static inline AMD64_Instruction *                                                           \
+    name(UNIT_Context *context, AMD64_Operand dst, AMD64_Operand a, AMD64_Operand b) {          \
+        AMD64_Instruction *instruction = _UNIT_Alloc(context,                                   \
+                                                     sizeof(AMD64_Instruction));                \
+        if (instruction == NULL) {                                                              \
+            return NULL;                                                                        \
+        }                                                                                       \
+        instruction->opcode = opcode_name;                                                      \
+        instruction->operands[0] = dst;                                                         \
+        instruction->operands[1] = a;                                                           \
+        instruction->operands[2] = b;                                                           \
+        instruction->operand_count = 3;                                                         \
+        return instruction;                                                                     \
+    }
+
 NO_ARGS_HELPER(ret, AMD64_RET)
 NO_ARGS_HELPER(syscall, AMD64_SYSCALL)
-SINGLE_OPERAND_HELPER(call_indirect, AMD64_CALL_INDIRECT)
-SINGLE_OPERAND_HELPER(call_symbol, AMD64_CALL_SYMBOL)
-SINGLE_OPERAND_HELPER(jmp, AMD64_JUMP)
-SINGLE_OPERAND_HELPER(_jmp_label, AMD64_JUMP_LABEL)
-SINGLE_OPERAND_HELPER(jump_if_equal, AMD64_JUMP_IF_EQUAL)
-SINGLE_OPERAND_HELPER(jump_if_not_equal, AMD64_JUMP_IF_NOT_EQUAL)
-SINGLE_OPERAND_HELPER(jump_if_greater, AMD64_JUMP_IF_GREATER)
-SINGLE_OPERAND_HELPER(jump_if_less, AMD64_JUMP_IF_LESS)
-SINGLE_OPERAND_HELPER(jump_if_greater_equal, AMD64_JUMP_IF_GREATER_EQUAL)
-SINGLE_OPERAND_HELPER(jump_if_less_equal, AMD64_JUMP_IF_LESS_EQUAL)
-SRC_DEST_HELPER(load_string, AMD64_LOAD_STRING)
-SRC_DEST_HELPER(cmp, AMD64_COMPARE)
-SRC_DEST_HELPER(lea, AMD64_LOAD_ADDRESS)
+NO_ARGS_HELPER(cqo, AMD64_CQO)
+ONE_ARG_HELPER(call_indirect, AMD64_CALL_INDIRECT)
+ONE_ARG_HELPER(call_symbol, AMD64_CALL_SYMBOL)
+ONE_ARG_HELPER(jmp, AMD64_JUMP)
+ONE_ARG_HELPER(_jmp_label, AMD64_JUMP_LABEL)
+ONE_ARG_HELPER(jump_if_equal, AMD64_JUMP_IF_EQUAL)
+ONE_ARG_HELPER(jump_if_not_equal, AMD64_JUMP_IF_NOT_EQUAL)
+ONE_ARG_HELPER(jump_if_greater, AMD64_JUMP_IF_GREATER)
+ONE_ARG_HELPER(jump_if_less, AMD64_JUMP_IF_LESS)
+ONE_ARG_HELPER(jump_if_greater_equal, AMD64_JUMP_IF_GREATER_EQUAL)
+ONE_ARG_HELPER(jump_if_less_equal, AMD64_JUMP_IF_LESS_EQUAL)
+TWO_ARG_HELPER(mov, AMD64_MOV)
+TWO_ARG_HELPER(load_string, AMD64_LOAD_STRING)
+TWO_ARG_HELPER(cmp, AMD64_COMPARE)
+TWO_ARG_HELPER(lea, AMD64_LOAD_ADDRESS)
+TWO_ARG_HELPER(add, AMD64_ADD)
+TWO_ARG_HELPER(sub, AMD64_SUB)
+TWO_ARG_HELPER(imul, AMD64_MUL)
+ONE_ARG_HELPER(idiv, AMD64_DIV)
+TWO_ARG_HELPER(mod, AMD64_MOD)
 
 static const AMD64_Register argument_registers[] = {
     REG_RDI,
@@ -168,6 +191,49 @@ flush_register(_UNIT_CompileContext *compile_context,
 }
 
 static UNIT_Status
+preserve_register(_UNIT_CompileContext *compile_context,
+                  _UNIT_MachineOperation *operation, AMD64_Register to_preserve,
+                  UNIT_Size *slot_ptr)
+{
+    assert(compile_context != NULL);
+    assert(operation != NULL);
+    assert(slot_ptr != NULL);
+#define IGNORE_IF_TARGET(name)                                      \
+    if (operation->name != NULL                                     \
+        && operation->name->type == _UNIT_TYPE_REGISTER             \
+        && register_map[operation->name->value] == to_preserve) {   \
+        *slot_ptr = -1;                                             \
+        return UNIT_OK;                                             \
+    }
+
+    IGNORE_IF_TARGET(destination);
+    IGNORE_IF_TARGET(argument_1);
+    IGNORE_IF_TARGET(argument_2);
+
+    UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
+    EMIT(mov(compile_context->context, stack_slot(slot), reg(to_preserve)));
+    *slot_ptr = slot;
+
+    return UNIT_OK;
+
+#undef IGNORE_IF_TARGET
+}
+
+static UNIT_Status
+restore_register(_UNIT_CompileContext *compile_context, AMD64_Register preserved,
+                 UNIT_Size slot)
+{
+    assert(compile_context != NULL);
+    if (slot == -1) {
+        return UNIT_OK;
+    }
+
+    EMIT(mov(compile_context->context, reg(preserved), stack_slot(slot)));
+    _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
+    return UNIT_OK;
+}
+
+static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
                     _UNIT_MachineOperation *operation)
 {
@@ -188,14 +254,20 @@ translate_operation(_UNIT_CompileContext *compile_context,
         return UNIT_FAIL;                                                           \
     }
 
+#define PRESERVE_REGISTER(name)                                                             \
+    UNIT_Size slot_ ##name;                                                                 \
+    if (UNIT_FAILED(preserve_register(compile_context, operation, name, &slot_ ##name))) {  \
+        return UNIT_FAIL;                                                                   \
+    }
+
+#define RESTORE_REGISTER(name)                                                              \
+    if (UNIT_FAILED(restore_register(compile_context, name, slot_ ##name))) {               \
+        return UNIT_FAIL;                                                                   \
+    }
+
     switch (operation->instruction) {
         case _UNIT_I_MOVE: {
             EMIT(mov(ctx, OP(destination), OP(argument_1)));
-            break;
-        }
-
-        case _UNIT_I_ADD: {
-            EMIT(add(ctx, OP(destination), OP(argument_1)));
             break;
         }
 
@@ -205,15 +277,21 @@ translate_operation(_UNIT_CompileContext *compile_context,
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
             assert(num_arguments <= 6);
 
-            UNIT_Size rax_slot = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
-            EMIT(mov(ctx, stack_slot(rax_slot), reg(REG_RAX)));
+            PRESERVE_REGISTER(REG_RAX);
 
             // Save argument registers into stack frame slots
             UNIT_Size save_slots[6];
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
+                AMD64_Register argument_register = argument_registers[argument];
+                // We don't want to preserve registers that are our own target
+                if (OP(destination).kind == OPERAND_REGISTER
+                    && argument_register == OP(destination).reg) {
+                    save_slots[argument] = -1;
+                    continue;
+                }
+
                 save_slots[argument] = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
                 assert(save_slots[argument] % 8 == 0);
-                AMD64_Register argument_register = argument_registers[argument];
                 EMIT(mov(ctx, stack_slot(save_slots[argument]), reg(argument_register)));
             }
 
@@ -228,16 +306,19 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             EMIT(mov(ctx, reg(REG_RAX), immediate(0)));
             EMIT(call_symbol(ctx, OP(argument_1)));
+            EMIT(mov(ctx, OP(destination), reg(REG_RAX)));
 
             // Restore argument registers from stack frame slots
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
+                if (save_slots[argument] == -1) {
+                    continue;
+                }
                 AMD64_Register argument_register = argument_registers[argument];
                 EMIT(mov(ctx, reg(argument_register), stack_slot(save_slots[argument])));
                 _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, save_slots[argument]);
             }
 
-            EMIT(mov(ctx, reg(REG_RAX), stack_slot(rax_slot)));
-            _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, rax_slot);
+            RESTORE_REGISTER(REG_RAX);
 
             break;
         }
@@ -315,6 +396,44 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
         case _UNIT_I_ADDRESS_OF: {
             EMIT(lea(ctx, OP(destination), OP(argument_1)));
+            break;
+        }
+
+        #define BINARY_OP(inst, helper)                                                 \
+            case inst: {                                                                \
+                EMIT(mov(ctx, OP(destination), OP(argument_1)));                        \
+                EMIT(helper(ctx, OP(destination), OP(argument_2)));                     \
+                break;                                                                  \
+            }
+
+        BINARY_OP(_UNIT_I_ADD, add);
+        BINARY_OP(_UNIT_I_SUB, sub);
+        BINARY_OP(_UNIT_I_MUL, imul);
+
+        case _UNIT_I_DIV:
+        case _UNIT_I_MOD: {
+            AMD64_Operand dst = OP(destination);
+            AMD64_Operand left = OP(argument_1);
+            AMD64_Operand right = OP(argument_2);
+            _UNIT_StackFrame *stack_frame = &compile_context->stack_frame;
+
+            PRESERVE_REGISTER(REG_RAX);
+            PRESERVE_REGISTER(REG_RDX);
+
+            EMIT(mov(ctx, reg(REG_RAX), left));
+            EMIT(cqo(ctx));
+            ENSURE_IN_REGISTER(argument_2);
+            EMIT(idiv(ctx, argument_2));
+            FLUSH_REGISTER(argument_2);
+
+            if (operation->instruction == _UNIT_I_MOD) {
+                EMIT(mov(ctx, dst, reg(REG_RDX)));
+            } else {
+                EMIT(mov(ctx, dst, reg(REG_RAX)));
+            }
+
+            RESTORE_REGISTER(REG_RDX);
+            RESTORE_REGISTER(REG_RAX);
             break;
         }
     }

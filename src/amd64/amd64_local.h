@@ -26,8 +26,6 @@ typedef enum {
 
 typedef enum {
     AMD64_MOV,
-    AMD64_ADD,
-    AMD64_SUB,
     AMD64_SYSCALL,
     AMD64_RET,
     AMD64_CALL_INDIRECT,
@@ -43,6 +41,12 @@ typedef enum {
     AMD64_COMPARE,
     AMD64_LOAD_STRING,
     AMD64_LOAD_ADDRESS,
+    AMD64_ADD,
+    AMD64_SUB,
+    AMD64_MUL,
+    AMD64_DIV,
+    AMD64_MOD,
+    AMD64_CQO
 } AMD64_Opcode;
 
 typedef enum {
@@ -63,7 +67,7 @@ typedef struct {
 
 typedef struct {
     AMD64_Opcode opcode;
-    AMD64_Operand operands[2];
+    AMD64_Operand operands[3];
     UNIT_Size operand_count;
 } AMD64_Instruction;
 

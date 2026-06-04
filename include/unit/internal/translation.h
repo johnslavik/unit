@@ -37,7 +37,6 @@ typedef struct _UNIT_MachineItem {
 
 typedef enum {
     _UNIT_I_MOVE,
-    _UNIT_I_ADD,
     _UNIT_I_JUMP_LABEL,
     _UNIT_I_JUMP,
     _UNIT_I_CALL_SYMBOL,
@@ -52,6 +51,11 @@ typedef enum {
     _UNIT_I_JUMP_IF_LESS_EQUAL,
     _UNIT_I_LOAD_STRING,
     _UNIT_I_ADDRESS_OF,
+    _UNIT_I_ADD,
+    _UNIT_I_SUB,
+    _UNIT_I_MUL,
+    _UNIT_I_DIV,
+    _UNIT_I_MOD,
 } _UNIT_MachineInstruction;
 
 typedef struct {

@@ -62,8 +62,26 @@ int main(void)
     NEW_JUMP_LABEL(correct);
     NEW_JUMP_LABEL(greater);
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+    ADDOP_STR("Guessing game!\nThe number is between 1 and 100");
+    ADDOP_CALL("puts", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0); // NULL
+    ADDOP_CALL("time", 1);
+    ADDOP_CALL("srand", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+
+    ADDOP_CALL("rand", 0);
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
+    ADDOP(UNIT_OP_MODULO);
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP(UNIT_OP_ADD);
     ADDOP_STORE_NAME(number);
+
+    ADDOP_STR("Debug: number is %d\n");
+    ADDOP_LOAD_NAME(number);
+    ADDOP_CALL("printf", 2);
+    ADDOP(UNIT_OP_POP_TOP);
 
     USE_LABEL(loop);
 

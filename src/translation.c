@@ -19,21 +19,22 @@ instruction_name(UNIT_Instruction instruction)
         NAME(_UNIT_OP_STORE_LOCAL_NAME);
         NAME(UNIT_OP_LOAD_LOCAL);
         NAME(UNIT_OP_STORE_LOCAL);
+        NAME(UNIT_OP_ADDRESS_OF);
         NAME(UNIT_OP_ADD);
         NAME(UNIT_OP_SUBTRACT);
         NAME(UNIT_OP_MULTIPLY);
         NAME(UNIT_OP_DIVIDE);
+        NAME(UNIT_OP_MODULO);
         NAME(_UNIT_OP_JUMP_MARKER);
         NAME(UNIT_OP_JUMP_TO);
-        NAME(UNIT_OP_CALL_NAME);
-        NAME(UNIT_OP_EXIT);
-        NAME(UNIT_OP_POP_TOP);
-        NAME(UNIT_OP_PREPARE_CALL);
-        NAME(UNIT_OP_RETURN_VALUE);
         NAME(UNIT_OP_JUMP_IF_FALSE);
         NAME(UNIT_OP_JUMP_IF_TRUE);
+        NAME(UNIT_OP_PREPARE_CALL);
+        NAME(UNIT_OP_CALL_NAME);
+        NAME(UNIT_OP_POP_TOP);
+        NAME(UNIT_OP_RETURN_VALUE);
+        NAME(UNIT_OP_EXIT);
         NAME(UNIT_OP_COMPARE);
-        NAME(UNIT_OP_ADDRESS_OF);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -43,7 +44,6 @@ const char *
 machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
 {
     switch (machine_instruction) {
-        NAME(_UNIT_I_ADD);
         NAME(_UNIT_I_MOVE);
         NAME(_UNIT_I_JUMP_LABEL);
         NAME(_UNIT_I_CALL_SYMBOL);
@@ -59,6 +59,11 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
         NAME(_UNIT_I_JUMP_IF_GREATER_EQUAL);
         NAME(_UNIT_I_LOAD_STRING);
         NAME(_UNIT_I_ADDRESS_OF);
+        NAME(_UNIT_I_ADD);
+        NAME(_UNIT_I_SUB);
+        NAME(_UNIT_I_MUL);
+        NAME(_UNIT_I_DIV);
+        NAME(_UNIT_I_MOD);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -854,15 +859,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_ADD: {
-                POP_TO_VAR(left);
-                POP_TO_VAR(right);
-
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_TWO(_UNIT_I_ADD, destination, left, right);
-                break;
-            }
-
             case UNIT_OP_CALL_NAME: {
                 ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
                 symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
@@ -1057,8 +1053,20 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            default:
-                break;
+#define BINARY_OPERATION(opcode, inst)                          \
+            case opcode: {                                      \
+                POP_TO_VAR(right);                              \
+                POP_TO_VAR(left);                               \
+                CREATE_DESTINATION(destination);                \
+                EMIT_DEST_TWO(inst, destination, left, right);  \
+                break;                                          \
+            }
+
+            BINARY_OPERATION(UNIT_OP_ADD, _UNIT_I_ADD);
+            BINARY_OPERATION(UNIT_OP_SUBTRACT, _UNIT_I_SUB);
+            BINARY_OPERATION(UNIT_OP_MULTIPLY, _UNIT_I_MUL);
+            BINARY_OPERATION(UNIT_OP_DIVIDE, _UNIT_I_DIV);
+            BINARY_OPERATION(UNIT_OP_MODULO, _UNIT_I_MOD);
         }
     }
 
