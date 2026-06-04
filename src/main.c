@@ -97,10 +97,8 @@ int main(void)
     ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 
     USE_LABEL(greater);
-    // String load isn't working here right now because stack spilling
-    // isn't correctly implemented
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 97);
-    ADDOP_CALL("putchar", 1);
+    ADDOP_STR("Higher");
+    ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP_TOP);
     ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 

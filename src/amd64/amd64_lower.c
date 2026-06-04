@@ -45,7 +45,7 @@ static const AMD64_Register register_map[] = {
 };
 
 AMD64_Operand
-machine_item_to_operand(_UNIT_MachineItem *machine_item)
+machine_item_to_operand(const _UNIT_MachineItem *machine_item)
 {
     assert(machine_item != NULL);
     if (machine_item->type == _UNIT_TYPE_REGISTER) {
@@ -137,6 +137,37 @@ static const AMD64_Register argument_registers[] = {
     }
 
 static UNIT_Status
+ensure_register(_UNIT_CompileContext *compile_context,
+                _UNIT_MachineItem *item, AMD64_Operand *out_operand)
+{
+    assert(compile_context != NULL);
+    assert(item != NULL);
+    assert(out_operand != NULL);
+    AMD64_Operand in_operand = machine_item_to_operand(item);
+    if (in_operand.kind == OPERAND_REGISTER) {
+        *out_operand = in_operand;
+        return UNIT_OK;
+    }
+
+    EMIT(mov(compile_context->context, reg(REG_R11), in_operand));
+    *out_operand = reg(REG_R11);
+    return UNIT_OK;
+}
+
+static UNIT_Status
+flush_register(_UNIT_CompileContext *compile_context,
+               _UNIT_MachineItem *item,
+               AMD64_Operand actual)
+{
+    AMD64_Operand original = machine_item_to_operand(item);
+    if (original.kind != OPERAND_REGISTER) {
+        EMIT(mov(compile_context->context, original, actual));
+    }
+
+    return UNIT_OK;
+}
+
+static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
                     _UNIT_MachineOperation *operation)
 {
@@ -145,6 +176,17 @@ translate_operation(_UNIT_CompileContext *compile_context,
     UNIT_Context *ctx = compile_context->context;
 
 #define OP(value) machine_item_to_operand(operation->value)
+
+#define ENSURE_IN_REGISTER(name)                                                            \
+    AMD64_Operand name;                                                                     \
+    if (UNIT_FAILED(ensure_register(compile_context, operation->name, &name))) {            \
+        return UNIT_FAIL;                                                                   \
+    }
+
+#define FLUSH_REGISTER(name)                                                        \
+    if (UNIT_FAILED(flush_register(compile_context, operation->name, name))) {      \
+        return UNIT_FAIL;                                                           \
+    }
 
     switch (operation->instruction) {
         case _UNIT_I_MOVE: {
@@ -265,7 +307,9 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_LOAD_STRING: {
-            EMIT(load_string(ctx, OP(destination), OP(argument_1)));
+            ENSURE_IN_REGISTER(destination);
+            EMIT(load_string(ctx, destination, OP(argument_1)));
+            FLUSH_REGISTER(destination);
             break;
         }
 
