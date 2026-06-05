@@ -61,6 +61,7 @@ int main(void)
     NEW_JUMP_LABEL(loop);
     NEW_JUMP_LABEL(correct);
     NEW_JUMP_LABEL(greater);
+    NEW_JUMP_LABEL(invalid);
 
     ADDOP_STR("Guessing game!\nThe number is between 1 and 100");
     ADDOP_CALL("puts", 1);
@@ -83,15 +84,24 @@ int main(void)
     ADDOP_CALL("printf", 2);
     ADDOP(UNIT_OP_POP_TOP);
 
-    USE_LABEL(loop);
+    ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
+
+    USE_LABEL(invalid);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP_STORE_NAME(guess);
+    ADDOP_STR("Not a valid number");
+    ADDOP_CALL("puts", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+
+    USE_LABEL(loop);
 
     ADDOP_STR("%d");
     ADDOP_INT(UNIT_OP_ADDRESS_OF, guess.id);
     ADDOP_CALL("scanf", 2);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_COMPARE, UNIT_COMPARE_NOT_EQUAL);
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, invalid);
 
     ADDOP_STR("Debug: guess was %d\n");
     ADDOP_LOAD_NAME(guess);

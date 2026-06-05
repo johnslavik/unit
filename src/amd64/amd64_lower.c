@@ -350,41 +350,23 @@ translate_operation(_UNIT_CompileContext *compile_context,
             break;
         }
 
-        case _UNIT_I_JUMP_IF_EQUAL: {
-            EMIT(cmp(ctx, OP(argument_1), OP(argument_2)));
-            EMIT(jump_if_equal(ctx, OP(destination)));
-            break;
-        }
+        #define JUMP_CONDITION(inst, op)                        \
+            case inst: {                                        \
+                ENSURE_IN_REGISTER(argument_1);                 \
+                EMIT(cmp(ctx, argument_1, OP(argument_2)));     \
+                FLUSH_REGISTER(argument_1);                     \
+                EMIT(op(ctx, OP(destination)));                 \
+                break;                                          \
+            }
 
-        case _UNIT_I_JUMP_IF_NOT_EQUAL: {
-            EMIT(cmp(ctx, OP(argument_1), OP(argument_2)));
-            EMIT(jump_if_not_equal(ctx, OP(destination)));
-            break;
-        }
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_EQUAL, jump_if_equal);
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_NOT_EQUAL, jump_if_not_equal);
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS, jump_if_less);
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS_EQUAL, jump_if_less_equal);
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER, jump_if_greater);
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER_EQUAL, jump_if_greater_equal);
 
-        case _UNIT_I_JUMP_IF_LESS: {
-            EMIT(cmp(ctx, OP(argument_1), OP(argument_2)));
-            EMIT(jump_if_less(ctx, OP(destination)));
-            break;
-        }
-
-        case _UNIT_I_JUMP_IF_GREATER: {
-            EMIT(cmp(ctx, OP(argument_1), OP(argument_2)));
-            EMIT(jump_if_greater(ctx, OP(destination)));
-            break;
-        }
-
-        case _UNIT_I_JUMP_IF_LESS_EQUAL: {
-            EMIT(cmp(ctx, OP(argument_1), OP(argument_2)));
-            EMIT(jump_if_less_equal(ctx, OP(destination)));
-            break;
-        }
-
-        case _UNIT_I_JUMP_IF_GREATER_EQUAL: {
-            EMIT(cmp(ctx, OP(argument_1), OP(argument_2)));
-            EMIT(jump_if_greater_equal(ctx, OP(destination)));
-            break;
-        }
+        #undef JUMP_CONDITION
 
         case _UNIT_I_LOAD_STRING: {
             ENSURE_IN_REGISTER(destination);
