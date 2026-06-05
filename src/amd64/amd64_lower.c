@@ -298,9 +298,24 @@ translate_operation(_UNIT_CompileContext *compile_context,
             // TODO: Handle when there are more than six args
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
                 AMD64_Register argument_register = argument_registers[argument];
-                AMD64_Operand value = machine_item_to_operand(
-                    _UNIT_Vector_GET(arguments, argument)
-                );
+                _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(arguments, argument);
+                AMD64_Operand value = machine_item_to_operand(arg_item);
+
+                // We load from the save slots in order to avoid some circular
+                // dependency issues.
+                // For example, RDI wants to go to RSI, and RSI wants to go to
+                // RDI. If you did a sequential mov rdi, rsi and mov rsi, rdi,
+                // then RDI would be clobbered before the second mov.
+                if (value.kind == OPERAND_REGISTER) {
+                    for (UNIT_Size index = 0; index < 8; ++index) {
+                        if (save_slots[index] != (UNIT_Size)-1
+                            && register_map[index] == value.reg) {
+                            value = stack_slot(save_slots[index]);
+                            break;
+                        }
+                    }
+                }
+
                 EMIT(mov(ctx, reg(argument_register), value));
             }
 
@@ -352,9 +367,14 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
         #define JUMP_CONDITION(inst, op)                        \
             case inst: {                                        \
-                ENSURE_IN_REGISTER(argument_1);                 \
-                EMIT(cmp(ctx, argument_1, OP(argument_2)));     \
-                FLUSH_REGISTER(argument_1);                     \
+                AMD64_Operand left = OP(argument_1);            \
+                AMD64_Operand right = OP(argument_2);           \
+                /* cmp needs at least one register operand */   \
+                if (left.kind != OPERAND_REGISTER) {            \
+                    ENSURE_IN_REGISTER(argument_1);             \
+                    left = argument_1;                          \
+                }                                               \
+                EMIT(cmp(ctx, left, right));                    \
                 EMIT(op(ctx, OP(destination)));                 \
                 break;                                          \
             }

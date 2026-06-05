@@ -18,6 +18,7 @@ enum {
     OPCODE_JMP_REL32 = 0xE9,
     OPCODE_CMP_RM64_IMM8  = 0x83,
     OPCODE_CMP_RM64_R64 = 0x39,
+    OPCODE_CMP_R64_RM64 = 0x3B,
     OPCODE_JCC_REL32 = 0x0F,
     OPCODE_JE_REL32 = 0x84,
     OPCODE_JNE_REL32 = 0x85,
@@ -271,20 +272,38 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         case AMD64_COMPARE: {
             AMD64_Operand dst = instr->operands[0];
             AMD64_Operand src = instr->operands[1];
-            // cmp reg, imm (group opcode, dst in rm field)
-            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_IMMEDIATE) {
+            assert(dst.kind == OPERAND_REGISTER);
+
+            // cmp reg, imm
+            if (src.kind == OPERAND_IMMEDIATE) {
                 EMIT_REX(0, dst.reg);
                 EMIT8(OPCODE_CMP_RM64_IMM8);
                 EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, reg_bits(dst.reg)));
                 EMIT8((uint8_t)src.immediate);
             }
-            // cmp reg, reg (src in reg field, dst in rm field)
-            else {
-                assert(src.kind == OPERAND_REGISTER);
-                assert(dst.kind == OPERAND_REGISTER);
+            // cmp reg, reg
+            else if (src.kind == OPERAND_REGISTER) {
                 EMIT_REX(src.reg, dst.reg);
                 EMIT8(OPCODE_CMP_RM64_R64);
                 EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
+            }
+            // cmp reg, [rsp+offset]
+            else {
+                assert(src.kind == OPERAND_STACK);
+                EMIT_REX(dst.reg, 0);
+                EMIT8(OPCODE_CMP_R64_RM64);
+                if (src.immediate == 0) {
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
+                    EMIT8(SIB_RSP_BASE);
+                } else if (src.immediate <= 127) {
+                    EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
+                    EMIT8(SIB_RSP_BASE);
+                    EMIT8((uint8_t)src.immediate);
+                } else {
+                    EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
+                    EMIT8(SIB_RSP_BASE);
+                    EMIT32((uint32_t)src.immediate);
+                }
             }
             break;
         }

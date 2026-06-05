@@ -88,6 +88,11 @@ int main(void)
 
     USE_LABEL(invalid);
 
+    // We need to consume the bad characters from the buffer
+    ADDOP_STR("%*[^\n]%*c");
+    ADDOP_CALL("scanf", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP_STORE_NAME(guess);
     ADDOP_STR("Not a valid number");
