@@ -1,7 +1,16 @@
+# CMake
 build/
 CMakeCache.txt
 cmake_install.cmake
+
+# clangd
 compile_flags.txt
+
+# Build artifacts
 output
 *.o
 CMakeFiles/
+
+# Documentation
+.venv/
+docs/_build/
