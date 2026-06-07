@@ -3,7 +3,7 @@
 #include <unit/internal/architectures.h>
 #include <unit/internal/code_buffer.h>
 #include <unit/internal/compile_context.h>
-
+#include <stdio.h>
 #include "amd64_local.h"
 
 // Actual opcodes
@@ -222,6 +222,32 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
                     EMIT32((uint32_t)src.immediate);
                 }
             }
+            // mov reg, [reg]
+            else if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_INDIRECT) {
+                EMIT_REX(dst.reg, src.reg);
+                EMIT8(OPCODE_MOV_R64_RM64);
+                EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
+            }
+            // mov [reg], reg
+            else if (dst.kind == OPERAND_INDIRECT && src.kind == OPERAND_REGISTER) {
+                EMIT_REX(src.reg, dst.reg);
+                EMIT8(OPCODE_MOV_RM64_R64);
+                EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), reg_bits(dst.reg)));
+            }
+            // mov [reg], imm
+            else if (dst.kind == OPERAND_INDIRECT && src.kind == OPERAND_IMMEDIATE) {
+                EMIT_REX(0, REG_R11);
+                EMIT8(OPCODE_MOV_R64_IMM64 + reg_bits(REG_R11));
+                EMIT64(src.immediate);
+                EMIT_REX(REG_R11, dst.reg);
+                EMIT8(OPCODE_MOV_RM64_R64);
+                EMIT8(modrm(MOD_INDIRECT, reg_bits(REG_R11), reg_bits(dst.reg)));
+            } else {
+                // It's easier for refactoring to use an unreachable else rather
+                // than asserting.
+                printf("dst.kind: %d, src.kind: %d\n", dst.kind, src.kind);
+                _UNIT_Unreachable();
+            }
             break;
         }
 
@@ -378,9 +404,10 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         case AMD64_ADD: {
             AMD64_Operand dst = instr->operands[0];
             AMD64_Operand src = instr->operands[1];
+            assert(dst.kind == OPERAND_REGISTER);
 
             // add reg, reg (src in reg field, dst in rm field)
-            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
+            if (src.kind == OPERAND_REGISTER) {
                 EMIT_REX(src.reg, dst.reg);
                 EMIT8(OPCODE_ADD_RM64_R64);
                 EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
@@ -388,7 +415,6 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             // add reg, imm32 (group opcode, dst in rm field)
             else {
                 assert(src.kind == OPERAND_IMMEDIATE);
-                assert(dst.kind == OPERAND_REGISTER);
                 EMIT_REX(0, dst.reg);
                 EMIT8(OPCODE_GROUP1_IMM32);
                 EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, reg_bits(dst.reg)));
@@ -400,16 +426,16 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         case AMD64_SUB: {
             AMD64_Operand dst = instr->operands[0];
             AMD64_Operand src = instr->operands[1];
+            assert(dst.kind == OPERAND_REGISTER);
 
             // sub reg, reg
-            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
+            if (src.kind == OPERAND_REGISTER) {
                 EMIT_REX(src.reg, dst.reg);
                 EMIT8(OPCODE_SUB_RM64_R64);
                 EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
             }
             // sub reg, imm32
             else {
-                assert(dst.kind == OPERAND_REGISTER);
                 assert(src.kind == OPERAND_IMMEDIATE);
                 EMIT_REX(0, dst.reg);
                 EMIT8(OPCODE_GROUP1_IMM32);

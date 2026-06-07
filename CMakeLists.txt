@@ -20,6 +20,9 @@ option(UNIT_BUILD_EXAMPLES "Build example programs" OFF)
 if(UNIT_BUILD_EXAMPLES)
     add_executable(unit_guess "${CMAKE_SOURCE_DIR}/examples/guessing_game.c")
     target_link_libraries(unit_guess PRIVATE unit)
+
+    add_executable(unit_brainf "${CMAKE_SOURCE_DIR}/examples/brainf.c")
+    target_link_libraries(unit_brainf PRIVATE unit)
 endif()
 
 include(GNUInstallDirs)

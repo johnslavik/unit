@@ -34,6 +34,15 @@ stack_slot(uint64_t offset) {
     };
 }
 
+AMD64_Operand
+indirect(AMD64_Operand operand) {
+    assert(operand.kind == OPERAND_REGISTER);
+    return (AMD64_Operand) {
+        .kind = OPERAND_INDIRECT,
+        .reg = operand.reg
+    };
+}
+
 static const AMD64_Register register_map[] = {
     REG_RAX,
     REG_RCX,
@@ -402,8 +411,10 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
         #define BINARY_OP(inst, helper)                                                 \
             case inst: {                                                                \
-                EMIT(mov(ctx, OP(destination), OP(argument_1)));                        \
-                EMIT(helper(ctx, OP(destination), OP(argument_2)));                     \
+                ENSURE_IN_REGISTER(destination);                                        \
+                EMIT(mov(ctx, destination, OP(argument_1)));                            \
+                EMIT(helper(ctx, destination, OP(argument_2)));                         \
+                FLUSH_REGISTER(destination);                                            \
                 break;                                                                  \
             }
 
@@ -435,6 +446,35 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             RESTORE_REGISTER(REG_RDX);
             RESTORE_REGISTER(REG_RAX);
+            break;
+        }
+
+        case _UNIT_I_DEREFERENCE: {
+            ENSURE_IN_REGISTER(argument_1);
+            // Always load through pointer into R11
+            EMIT(mov(ctx, reg(REG_R11), indirect(argument_1)));
+            // Then move R11 to actual destination (register or stack slot)
+            EMIT(mov(ctx, OP(destination), reg(REG_R11)));
+            break;
+        }
+
+        case _UNIT_I_WRITE_THROUGH: {
+            ENSURE_IN_REGISTER(destination);
+            AMD64_Operand addr = destination;
+
+            if (OP(argument_1).kind == OPERAND_REGISTER
+                || OP(argument_1).kind == OPERAND_IMMEDIATE) {
+                EMIT(mov(ctx, indirect(addr), OP(argument_1)));
+            } else {
+                // Value is on the stack
+                UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(
+                    &compile_context->stack_frame);
+                EMIT(mov(ctx, stack_slot(slot), addr));
+                EMIT(mov(ctx, reg(REG_R11), OP(argument_1)));
+                EMIT(mov(ctx, reg(addr.reg), stack_slot(slot)));
+                EMIT(mov(ctx, indirect(reg(addr.reg)), reg(REG_R11)));
+                _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
+            }
             break;
         }
     }

@@ -43,6 +43,8 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_COMPARE_LESS_EQUAL);
         NAME(UNIT_OP_COPY);
         NAME(UNIT_OP_SWAP);
+        NAME(UNIT_OP_DEREFERENCE);
+        NAME(UNIT_OP_WRITE_THROUGH);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -72,6 +74,8 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
         NAME(_UNIT_I_MUL);
         NAME(_UNIT_I_DIV);
         NAME(_UNIT_I_MOD);
+        NAME(_UNIT_I_DEREFERENCE);
+        NAME(_UNIT_I_WRITE_THROUGH);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -666,46 +670,46 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-        case _UNIT_OP_STORE_LOCAL_NAME:
-        case UNIT_OP_STORE_LOCAL: {
-            const char *hint = NULL;
-            if (operation->instruction == _UNIT_OP_STORE_LOCAL_NAME) {
-                hint = _UNIT_Vector_GET(&procedure->_local_variables,
-                                        operation->argument);
-            }
+            case _UNIT_OP_STORE_LOCAL_NAME:
+            case UNIT_OP_STORE_LOCAL: {
+                const char *hint = NULL;
+                if (operation->instruction == _UNIT_OP_STORE_LOCAL_NAME) {
+                    hint = _UNIT_Vector_GET(&procedure->_local_variables,
+                                            operation->argument);
+                }
 
-            UNIT_Size location_id = UNIQUE_ID();
-            _UNIT_LocalState *local_state = create_new_local(&locals,
-                                                             operation->argument,
-                                                             location_id);
-            if (local_state == NULL) {
-                goto error;
-            }
-            _UNIT_MachineItem *location = create_new_location(translation,
-                                                              CURRENT_BLOCK(),
-                                                              location_id);
-            if (location == NULL) {
-                goto error;
-            }
-            location->hint = hint;
-
-            POP_TO_VAR(item);
-            EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
-
-            if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
-                local_state->stack_slot = locals.next_stack_slot++;
-                _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
-                                                           local_state->stack_slot, hint);
-                if (slot == NULL) {
+                UNIT_Size location_id = UNIQUE_ID();
+                _UNIT_LocalState *local_state = create_new_local(&locals,
+                                                                operation->argument,
+                                                                location_id);
+                if (local_state == NULL) {
                     goto error;
                 }
-                // Sharing machine items is probably not a great idea but it's
-                // not causing any problems at the moment. We can easily make
-                // a copy of the location later if we need to.
-                EMIT_DEST_ONE(_UNIT_I_MOVE, slot, location);
+                _UNIT_MachineItem *location = create_new_location(translation,
+                                                                CURRENT_BLOCK(),
+                                                                location_id);
+                if (location == NULL) {
+                    goto error;
+                }
+                location->hint = hint;
+
+                POP_TO_VAR(item);
+                EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
+
+                if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
+                    local_state->stack_slot = locals.next_stack_slot++;
+                    _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
+                                                            local_state->stack_slot, hint);
+                    if (slot == NULL) {
+                        goto error;
+                    }
+                    // Sharing machine items is probably not a great idea but it's
+                    // not causing any problems at the moment. We can easily make
+                    // a copy of the location later if we need to.
+                    EMIT_DEST_ONE(_UNIT_I_MOVE, slot, location);
+                }
+                break;
             }
-            break;
-        }
 
             case _UNIT_OP_LOAD_LOCAL_NAME:
             case UNIT_OP_LOAD_LOCAL: {
@@ -946,24 +950,38 @@ _UNIT_Translate(_UNIT_Translation *translation,
             BINARY_OPERATION(UNIT_OP_DIVIDE, _UNIT_I_DIV);
             BINARY_OPERATION(UNIT_OP_MODULO, _UNIT_I_MOD);
 
-        case UNIT_OP_COPY: {
-            UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
-            assert(index >= 0);
-            _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
-            // XXX: Might cause problems without a copy?
-            PUSH_ITEM(item);
-            break;
-        }
+            case UNIT_OP_COPY: {
+                UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
+                assert(index >= 0);
+                _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
+                // XXX: Might cause problems without a copy?
+                PUSH_ITEM(item);
+                break;
+            }
 
-        case UNIT_OP_SWAP: {
-            POP_TO_VAR(top);
-            UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
-            assert(index >= 0);
-            _UNIT_MachineItem *to_swap = _UNIT_Vector_STEAL(&stack, index);
-            _UNIT_Vector_SET(&stack, index, top);
-            PUSH_ITEM(to_swap);
-            break;
-        }
+            case UNIT_OP_SWAP: {
+                POP_TO_VAR(top);
+                UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
+                assert(index >= 0);
+                _UNIT_MachineItem *to_swap = _UNIT_Vector_STEAL(&stack, index);
+                _UNIT_Vector_SET(&stack, index, top);
+                PUSH_ITEM(to_swap);
+                break;
+            }
+
+            case UNIT_OP_DEREFERENCE: {
+                POP_TO_VAR(address);
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_ONE(_UNIT_I_DEREFERENCE, destination, address);
+                break;
+            }
+
+            case UNIT_OP_WRITE_THROUGH: {
+                POP_TO_VAR(value);
+                POP_TO_VAR(address);
+                EMIT_DEST_ONE(_UNIT_I_WRITE_THROUGH, address, value);
+                break;
+            }
         }
     }
 
