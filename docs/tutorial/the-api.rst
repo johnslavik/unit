@@ -79,6 +79,7 @@ We can do this using a function called :c:func:`UNIT_PrintError`, like so:
 
 
 .. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` C
 
     UNIT_SomeType *something = UNIT_Something(context);
     if (something == NULL) {
@@ -130,6 +131,7 @@ structure in a block of memory that is already allocated. In practice, this
 is usually something like a stack allocation. For example:
 
 .. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` C
 
     UNIT_StructureName structure;
     if (UNIT_FAILED(UNIT_StructureName_Init(&structure))) {
@@ -143,6 +145,7 @@ in the ``Init`` function; as such, there should always be at least one call to
 pointer to ``UNIT_StructureName`` and no other arguments. For example:
 
 .. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` C
 
     UNIT_StructureName structure;
     if (UNIT_FAILED(UNIT_StructureName_Init(&structure))) {
@@ -167,6 +170,7 @@ allocator) and then initializes it. In fact, a ``New`` function is always
 defined as something like this:
 
 .. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` C
 
     UNIT_StructureName *
     UNIT_StructureName_New(/* Any structure-specific arguments would go here */)
@@ -189,6 +193,7 @@ defined as something like this:
 pointer in addition to clearing the structure. A ``Free`` function is defined as:
 
 .. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` C
 
     void
     UNIT_StructureName_Free(UNIT_StructureName *structure)
@@ -203,6 +208,7 @@ call ``UNIT_StructureName_Free`` on any heap-allocated memory. For example,
 the following code is invalid:
 
 .. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` C
 
     UNIT_StructureName *structure = malloc(sizeof(UNIT_StructureName));
     UNIT_StructureName_Init(structure);

@@ -1,4 +1,4 @@
-The basics of procedures
+The Basics of Procedures
 ========================
 
 What is a "procedure"?
@@ -34,7 +34,7 @@ So, using our prior knowledge about how we initialize structures
 
 .. code-block:: c
    :linenos:
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     #include <unit/unit.h>
 
@@ -68,7 +68,7 @@ find UNIT's header files and link against it.
 So, let's save the above as ``main.c`` and run it:
 
 .. code-block:: bash
-   :caption: bash
+   :caption: :iconify:`devicon-plain:bash` bash
 
    $ gcc main.c -o out -lunit
    $ ./out
@@ -88,7 +88,7 @@ memory:
 .. code-block:: c
    :emphasize-lines: 10-15
    :linenos:
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
 
     #include <unit/unit.h>
@@ -122,7 +122,7 @@ some idea of what went wrong if something were to fail:
 .. code-block:: c
    :emphasize-lines: 12-13
    :linenos:
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     #include <unit/unit.h>
 
@@ -193,7 +193,7 @@ Now, if we apply this to our code:
 .. code-block:: c
    :emphasize-lines: 17-29
    :linenos:
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     #include <unit/unit.h>
 
@@ -239,7 +239,7 @@ We can clean this up by adding some macros tailored to our function, like so:
 .. code-block:: c
    :emphasize-lines: 17-28
    :linenos:
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     #include <unit/unit.h>
 
@@ -328,7 +328,7 @@ our code is running:
 .. code-block:: c
    :emphasize-lines: 14
    :linenos:
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     int main(void) {
         /* ... */
@@ -353,7 +353,7 @@ our code is running:
     }
 
 .. code-block:: bash
-   :caption: bash
+   :caption: :iconify:`devicon-plain:bash` bash
 
    $ gcc main.c -o out -lunit
    $ ./out

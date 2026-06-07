@@ -1,4 +1,4 @@
-Your first program with UNIT
+Your First Program With UNIT
 ============================
 
 This section provides instructions on how to build a "hello world" program
@@ -10,6 +10,8 @@ Example
 Start with some C code using UNIT:
 
 .. code-block:: c
+    :linenos:
+    :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     #include <unit/unit.h>
 

@@ -24,7 +24,7 @@ Currently, UNIT only supports the AMD64 architecture, so let's pass
 Now, our code looks like this:
 
 .. code-block:: c
-   :caption: main.c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
 
     #include <unit/unit.h>
 

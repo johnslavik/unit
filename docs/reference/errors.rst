@@ -59,7 +59,8 @@ Errors
     Return the error message that is currently active on the context.
     If there isn't any error set, then this returns ``NULL``.
 
-    .. important:: Quirk
+    .. admonition:: Quirk
+       :class: important
 
         A return value of ``NULL`` does not indicate failure, so no error is
         set in that case.

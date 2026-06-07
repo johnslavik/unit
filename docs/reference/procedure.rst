@@ -1,7 +1,6 @@
 Procedures
 ==========
 
-
 .. c:struct:: UNIT_Procedure
 
    A container of instructions.

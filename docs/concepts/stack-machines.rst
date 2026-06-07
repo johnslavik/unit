@@ -22,7 +22,7 @@ imagine that you would like to add two integers. In a stack machine, this looks
 something like this:
 
 .. code-block::
-   :caption: Stack machine
+   :caption: :iconify:`ri:stack-fill` Stack machine
 
    PUSH 2
    PUSH 3
@@ -48,7 +48,7 @@ you might do something like this:
 
 
 .. code-block::
-   :caption: Register machine
+   :caption: :iconify:`ri:cpu-line` Register machine
 
    MOVE REGISTER_1, 2
    MOVE REGISTER_2, 3
@@ -66,7 +66,7 @@ Let's go to a higher level and imagine that you have an AST representing
 ``2 + 3``:
 
 .. code-block:: python
-   :caption: Python
+   :caption: :iconify:`akar-icons:python-fill` Python
 
     class Int:
         def __init__(self, value: int) -> None:
@@ -84,7 +84,7 @@ Creating an efficient code generation method for these classes is complicated.
 Your first instinct might be to assign a register value to each class, like so:
 
 .. code-block:: python
-   :caption: Python
+   :caption: :iconify:`akar-icons:python-fill` Python
 
     class Int:
         ...
@@ -116,7 +116,7 @@ value into the register, use it in ``ADD``, and then restore the state of the re
 We could hack it together like this:
 
 .. code-block:: python
-   :caption: Python
+   :caption: :iconify:`akar-icons:python-fill` Python
 
     class Int:
         ...
@@ -168,7 +168,7 @@ that have already solved these problems, such as `LLVM <https://llvm.org/>`_,
 But, if we wanted to generate stack machine code for this, then it's easy:
 
 .. code-block:: python
-   :caption: Python
+   :caption: :iconify:`akar-icons:python-fill` Python
 
     class Int:
         ...
