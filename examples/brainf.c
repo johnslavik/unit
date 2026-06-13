@@ -147,6 +147,21 @@ codegen_print(UNIT_Procedure *procedure)
 }
 
 static int8_t
+codegen_input(UNIT_Procedure *procedure)
+{
+    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+    // [ptr]
+
+    ADDOP_CALL("getchar", 0);
+    // [ptr, char]
+
+    ADDOP(UNIT_OP_WRITE_THROUGH);
+
+    return 0;
+}
+
+
+static int8_t
 codegen_final(UNIT_Procedure *procedure)
 {
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
@@ -228,6 +243,9 @@ int main(int argc, char **argv)
                 break;
             }
             case ',': {
+                if (codegen_input(&procedure) < 0) {
+                    goto error;
+                }
                 break;
             }
             case '[': {
