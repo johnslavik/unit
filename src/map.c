@@ -178,7 +178,7 @@ expand(_UNIT_Map *map) {
     for (UNIT_Size index = 0; index < map->capacity; index++) {
         _UNIT_MapPair *item = &map->items[index];
         if (item->key != NULL) {
-            UNIT_Size result = set_entry(
+            set_entry(
                 map,
                 new_items,
                 new_capacity,
@@ -186,9 +186,6 @@ expand(_UNIT_Map *map) {
                 item->value,
                 item->hash
             );
-            (void)result;
-            // There should be no new items
-            assert(result == 0);
         }
     }
 

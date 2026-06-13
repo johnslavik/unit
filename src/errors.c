@@ -55,9 +55,7 @@ UNIT_PrintError(const UNIT_Context *context, FILE *stream)
     assert(context != NULL);
     assert(stream != NULL);
     UNIT_ErrorCode code = context->_internal.error.code;
-    if (code == UNIT_ERROR_NONE) {
-        fprintf(stream, "no error occurred\n");
-    } else {
+    if (code != UNIT_ERROR_NONE) {
         fprintf(stream, "%s: %s\n", UNIT_ErrorCode_ToString(code),
                 context->_internal.error.message);
     }

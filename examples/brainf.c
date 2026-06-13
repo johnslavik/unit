@@ -170,13 +170,86 @@ codegen_final(UNIT_Procedure *procedure)
     return 0;
 }
 
+static int8_t
+codegen_loop_start(UNIT_Procedure *procedure)
+{
+    NEW_JUMP_LABEL(loop);
+    NEW_JUMP_LABEL(end);
+
+    USE_LABEL(loop);
+
+    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+    ADDOP(UNIT_OP_DEREFERENCE);
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    // [*ptr, 0]
+    ADDOP(UNIT_OP_COMPARE_EQUAL);
+
+    // [*ptr == 0]
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, end);
+
+    return 0;
+}
+
+static int8_t
+codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
+{
+    char ch;
+    while ((ch = fgetc(file)) != EOF) {
+        switch (ch) {
+            #define CODEGEN(name)                               \
+                {                                               \
+                    if (codegen_ ##name (procedure) < 0) {      \
+                        return -1;                              \
+                    }                                           \
+                    break;                                      \
+                }
+
+            case '>': CODEGEN(right);
+            case '<': CODEGEN(left);
+            case '+': CODEGEN(add);
+            case '-': CODEGEN(sub);
+            case '.': CODEGEN(print);
+            case ',': CODEGEN(input);
+            case '[': {
+                NEW_JUMP_LABEL(loop);
+                NEW_JUMP_LABEL(end);
+
+                USE_LABEL(loop);
+
+                ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+                ADDOP(UNIT_OP_DEREFERENCE);
+                ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+                // [*ptr, 0]
+                ADDOP(UNIT_OP_COMPARE_EQUAL);
+
+                // [*ptr == 0]
+                ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, end);
+                int8_t result = codegen_body(procedure, file, /*in_loop=*/1);
+                if ((result != 1) && in_loop) {
+                    puts("error: loop was never closed (missing ])");
+                    return -1;
+                }
+
+                USE_LABEL(end);
+                break;
+            }
+            case ']':
+                return 1;  // return to caller's '[' handler
+            default:
+                // Comment character
+                break;
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     char *path;
     if (argc < 2) {
         path = NULL;
     } else {
-        path = argv[2];
+        path = argv[1];
     }
 
     FILE *file;
@@ -204,60 +277,14 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    char character;
-    while (true) {
-        character = fgetc(file);
-        if (character == EOF) {
-            break;
-        }
+    int8_t result = codegen_body(&procedure, file, /*in_loop=*/0);
+    if (result < 0) {
+        goto error;
+    }
 
-        switch (character) {
-            case '>': {
-                if (codegen_right(&procedure) < 0) {
-                    goto error;
-                }
-                break;
-            }
-            case '<': {
-                if (codegen_left(&procedure) < 0) {
-                    goto error;
-                }
-                break;
-            }
-            case '+': {
-                if (codegen_add(&procedure) < 0) {
-                    goto error;
-                }
-                break;
-            }
-            case '-': {
-                if (codegen_sub(&procedure) < 0) {
-                    goto error;
-                }
-                break;
-            }
-            case '.': {
-                if (codegen_print(&procedure) < 0) {
-                    goto error;
-                }
-                break;
-            }
-            case ',': {
-                if (codegen_input(&procedure) < 0) {
-                    goto error;
-                }
-                break;
-            }
-            case '[': {
-                break;
-            }
-            case ']': {
-                break;
-            }
-            default:
-                // Comment character
-                break;
-        }
+    if (result == 1) {
+        puts("error: ] outside loop");
+        goto error;
     }
 
     if (codegen_final(&procedure) < 0) {
