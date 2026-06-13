@@ -373,7 +373,10 @@ create_new_location(_UNIT_Translation *translation, _UNIT_BasicBlock *block, int
         return NULL;
     }
 
-    return item;
+    UNIT_Size index = _UNIT_Vector_SIZE(&block->instructions);
+    if (UNIT_FAILED(_UNIT_SizeMap_Set(&block->liveness.last_uses, value, index))) {
+        return NULL;
+    }
 
     return item;
 }
@@ -396,9 +399,8 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
     assert(result != NULL);
 
     if (result->type == _UNIT_TYPE_LOCATION) {
-        if (UNIT_FAILED(_UNIT_SizeSet_Add(&block->liveness.used_locations,
-                                          result->value))) {
-            return NULL;
+        if (!_UNIT_SizeSet_Contains(&block->liveness.created_locations, result->value)) {
+            _UNIT_SizeSet_Add(&block->liveness.used_locations, result->value);
         }
     }
     return result;
