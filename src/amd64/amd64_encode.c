@@ -8,17 +8,27 @@
 
 // Actual opcodes
 enum {
-    OPCODE_MOV_RM64_R64  = 0x89,
-    OPCODE_MOV_R64_RM64  = 0x8B,
+    OPCODE_MOV_RM64_R64 = 0x89,
+    OPCODE_MOV_R64_RM64 = 0x8B,
     OPCODE_MOV_R64_IMM64 = 0xB8,
-    OPCODE_RET = 0xc3,
+    OPCODE_MOV_RM8_R8 = 0x88,
+} Move;
+
+enum {
+    OPCODE_OPERAND_SIZE_PREFIX = 0x66,
+    OPCODE_MOVZX_R64_RM8_0 = 0x0F,
+    OPCODE_MOVZX_R64_RM8_1 = 0xB6,
+    OPCODE_MOVZX_R64_RM16_0 = 0x0F,
+    OPCODE_MOVZX_R64_RM16_1 = 0xB7,
+} MoveWithZeroExtend;
+
+enum {
     OPCODE_SYSCALL_0 = 0x0f,
     OPCODE_SYSCALL_1 = 0x05,
-    OPCODE_CALL_REL32 = 0xE8,
+} Syscall;
+
+enum {
     OPCODE_JMP_REL32 = 0xE9,
-    OPCODE_CMP_RM64_IMM8  = 0x83,
-    OPCODE_CMP_RM64_R64 = 0x39,
-    OPCODE_CMP_R64_RM64 = 0x3B,
     OPCODE_JCC_REL32 = 0x0F,
     OPCODE_JE_REL32 = 0x84,
     OPCODE_JNE_REL32 = 0x85,
@@ -26,15 +36,30 @@ enum {
     OPCODE_JGE_REL32 = 0x8D,
     OPCODE_JLE_REL32 = 0x8E,
     OPCODE_JG_REL32 = 0x8F,
-    OPCODE_LEA = 0x8D,
+} Jump;
+
+enum {
+    OPCODE_CMP_RM64_IMM8  = 0x83,
+    OPCODE_CMP_RM64_R64 = 0x39,
+    OPCODE_CMP_R64_RM64 = 0x3B,
+} Compare;
+
+enum {
     OPCODE_ADD_RM64_R64 = 0x01,
     OPCODE_SUB_RM64_IMM8 = 0x83,
     OPCODE_SUB_RM64_R64 = 0x29,
-    OPCODE_IMUL_R64_RM64_0 = 0x0F, // imul is split into two bytes
+    // imul is split into two bytes
+    OPCODE_IMUL_R64_RM64_0 = 0x0F,
     OPCODE_IMUL_R64_RM64_1 = 0xAF,
     OPCODE_IDIV_RM64 = 0xF7,
+} Arithmetic;
+
+enum {
+    OPCODE_RET = 0xc3,
+    OPCODE_CALL_REL32 = 0xE8,
+    OPCODE_LEA = 0x8D,
     OPCODE_CQO = 0x99,
-};
+} Misc;
 
 // Multi-purpose opcodes (specify the actual thing using ModRM)
 enum {
@@ -246,8 +271,79 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             } else {
                 // It's easier for refactoring to use an unreachable else rather
                 // than asserting.
-                printf("dst.kind: %d, src.kind: %d\n", dst.kind, src.kind);
                 _UNIT_Unreachable();
+            }
+            break;
+        }
+
+        case AMD64_MOVZX: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+            UNIT_Size size = instr->operands[2].immediate;
+            assert(dst.kind == OPERAND_REGISTER);
+            assert(src.kind == OPERAND_INDIRECT);
+
+            switch (size) {
+                case 1:
+                    EMIT_REX(dst.reg, src.reg);
+                    EMIT8(OPCODE_MOVZX_R64_RM8_0);
+                    EMIT8(OPCODE_MOVZX_R64_RM8_1);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
+                    break;
+                case 2:
+                    EMIT_REX(dst.reg, src.reg);
+                    EMIT8(OPCODE_MOVZX_R64_RM16_0);
+                    EMIT8(OPCODE_MOVZX_R64_RM16_1);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
+                    break;
+                case 4:
+                    // mov r32, [reg] (implicit zero-extend to 64, no REX.W)
+                    EMIT8(rex(0, needs_rex_r(dst.reg), 0, needs_rex_r(src.reg)));
+                    EMIT8(OPCODE_MOV_R64_RM64);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
+                    break;
+                case 8:
+                    EMIT_REX(dst.reg, src.reg);
+                    EMIT8(OPCODE_MOV_R64_RM64);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
+                    break;
+                default:
+                    _UNIT_Unreachable();
+            }
+            break;
+        }
+
+        case AMD64_MOV_SIZED: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+            UNIT_Size size = instr->operands[2].immediate;
+            assert(dst.kind == OPERAND_INDIRECT);
+            assert(src.kind == OPERAND_REGISTER);
+
+            switch (size) {
+                case 1:
+                    EMIT_REX(src.reg, dst.reg);
+                    EMIT8(OPCODE_MOV_RM8_R8);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), reg_bits(dst.reg)));
+                    break;
+                case 2:
+                    EMIT8(OPCODE_OPERAND_SIZE_PREFIX);
+                    EMIT_REX(src.reg, dst.reg);
+                    EMIT8(OPCODE_MOV_RM64_R64);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), reg_bits(dst.reg)));
+                    break;
+                case 4:
+                    EMIT8(rex(0, needs_rex_r(src.reg), 0, needs_rex_r(dst.reg)));
+                    EMIT8(OPCODE_MOV_RM64_R64);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), reg_bits(dst.reg)));
+                    break;
+                case 8:
+                    EMIT_REX(src.reg, dst.reg);
+                    EMIT8(OPCODE_MOV_RM64_R64);
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), reg_bits(dst.reg)));
+                    break;
+                default:
+                    _UNIT_Unreachable();
             }
             break;
         }

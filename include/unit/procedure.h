@@ -37,8 +37,8 @@ typedef enum {
     UNIT_OP_ADDRESS_OF,
     UNIT_OP_COPY,
     UNIT_OP_SWAP,
-    UNIT_OP_DEREFERENCE,
-    UNIT_OP_WRITE_THROUGH
+    UNIT_OP_READ_BYTES,
+    UNIT_OP_WRITE_BYTES
 } UNIT_Instruction;
 
 typedef struct {

@@ -107,13 +107,13 @@ codegen_add(UNIT_Procedure *procedure)
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
     ADDOP_INT(UNIT_OP_COPY, 0);
 
-    ADDOP(UNIT_OP_DEREFERENCE);
+    ADDOP_INT(UNIT_OP_READ_BYTES, 1);
     // [ptr, *ptr]
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
     ADDOP(UNIT_OP_ADD);
     // [ptr, *ptr + 1]
 
-    ADDOP(UNIT_OP_WRITE_THROUGH);
+    ADDOP_INT(UNIT_OP_WRITE_BYTES, 1);
     return 0;
 }
 
@@ -123,13 +123,13 @@ codegen_sub(UNIT_Procedure *procedure)
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
     ADDOP_INT(UNIT_OP_COPY, 0);
 
-    ADDOP(UNIT_OP_DEREFERENCE);
+    ADDOP_INT(UNIT_OP_READ_BYTES, 1);
     // [ptr, *ptr]
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
     ADDOP(UNIT_OP_SUBTRACT);
     // [ptr, *ptr - 1]
 
-    ADDOP(UNIT_OP_WRITE_THROUGH);
+    ADDOP_INT(UNIT_OP_WRITE_BYTES, 1);
     return 0;
 }
 
@@ -137,7 +137,7 @@ static int8_t
 codegen_print(UNIT_Procedure *procedure)
 {
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-    ADDOP(UNIT_OP_DEREFERENCE);
+    ADDOP_INT(UNIT_OP_READ_BYTES, 1);
     // [*ptr]
 
     ADDOP_CALL("putchar", 1);
@@ -155,7 +155,7 @@ codegen_input(UNIT_Procedure *procedure)
     ADDOP_CALL("getchar", 0);
     // [ptr, char]
 
-    ADDOP(UNIT_OP_WRITE_THROUGH);
+    ADDOP_INT(UNIT_OP_WRITE_BYTES, 1);
 
     return 0;
 }
@@ -179,7 +179,7 @@ codegen_loop_start(UNIT_Procedure *procedure)
     USE_LABEL(loop);
 
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-    ADDOP(UNIT_OP_DEREFERENCE);
+    ADDOP_INT(UNIT_OP_READ_BYTES, 1);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     // [*ptr, 0]
     ADDOP(UNIT_OP_COMPARE_EQUAL);
@@ -217,7 +217,7 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
                 USE_LABEL(loop);
 
                 ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-                ADDOP(UNIT_OP_DEREFERENCE);
+                ADDOP_INT(UNIT_OP_READ_BYTES, 1);
                 ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
                 // [*ptr, 0]
                 ADDOP(UNIT_OP_COMPARE_EQUAL);
@@ -229,6 +229,8 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
                     puts("error: loop was never closed (missing ])");
                     return -1;
                 }
+
+                ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 
                 USE_LABEL(end);
                 break;

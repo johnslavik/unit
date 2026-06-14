@@ -115,7 +115,6 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
         return instruction;                                                                     \
     }
 
-// Not used yet but we'll probably need this eventually
 #define THREE_ARG_HELPER(name, opcode_name)                                                     \
     static inline AMD64_Instruction *                                                           \
     name(UNIT_Context *context, AMD64_Operand dst, AMD64_Operand a, AMD64_Operand b) {          \
@@ -146,6 +145,8 @@ ONE_ARG_HELPER(jump_if_less, AMD64_JUMP_IF_LESS)
 ONE_ARG_HELPER(jump_if_greater_equal, AMD64_JUMP_IF_GREATER_EQUAL)
 ONE_ARG_HELPER(jump_if_less_equal, AMD64_JUMP_IF_LESS_EQUAL)
 TWO_ARG_HELPER(mov, AMD64_MOV)
+THREE_ARG_HELPER(movzx, AMD64_MOVZX)
+THREE_ARG_HELPER(mov_sized, AMD64_MOV_SIZED)
 TWO_ARG_HELPER(load_string, AMD64_LOAD_STRING)
 TWO_ARG_HELPER(cmp, AMD64_COMPARE)
 TWO_ARG_HELPER(lea, AMD64_LOAD_ADDRESS)
@@ -462,30 +463,34 @@ translate_operation(_UNIT_CompileContext *compile_context,
             break;
         }
 
-        case _UNIT_I_DEREFERENCE: {
+        case _UNIT_I_READ_BYTES: {
             ENSURE_IN_REGISTER(argument_1);
-            // Always load through pointer into R11
-            EMIT(mov(ctx, reg(REG_R11), indirect(argument_1)));
-            // Then move R11 to actual destination (register or stack slot)
+            UNIT_Size size = operation->argument_2->value;
+
+            if (size == 8) {
+                EMIT(mov(ctx, reg(REG_R11), indirect(argument_1)));
+            } else {
+                EMIT(movzx(ctx, reg(REG_R11), indirect(argument_1), immediate(size)));
+            }
             EMIT(mov(ctx, OP(destination), reg(REG_R11)));
             break;
         }
 
-        case _UNIT_I_WRITE_THROUGH: {
+        case _UNIT_I_WRITE_BYTES: {
             ENSURE_IN_REGISTER(destination);
             AMD64_Operand addr = destination;
+            UNIT_Size size = operation->argument_2->value;
 
             if (OP(argument_1).kind == OPERAND_REGISTER
                 || OP(argument_1).kind == OPERAND_IMMEDIATE) {
-                EMIT(mov(ctx, indirect(addr), OP(argument_1)));
+                EMIT(mov_sized(ctx, indirect(addr), OP(argument_1), immediate(size)));
             } else {
-                // Value is on the stack
                 UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(
                     &compile_context->stack_frame);
                 EMIT(mov(ctx, stack_slot(slot), addr));
                 EMIT(mov(ctx, reg(REG_R11), OP(argument_1)));
                 EMIT(mov(ctx, reg(addr.reg), stack_slot(slot)));
-                EMIT(mov(ctx, indirect(reg(addr.reg)), reg(REG_R11)));
+                EMIT(mov_sized(ctx, indirect(reg(addr.reg)), reg(REG_R11), immediate(size)));
                 _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
             }
             break;

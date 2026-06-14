@@ -60,8 +60,8 @@ typedef enum {
     _UNIT_I_MUL,
     _UNIT_I_DIV,
     _UNIT_I_MOD,
-    _UNIT_I_DEREFERENCE,
-    _UNIT_I_WRITE_THROUGH,
+    _UNIT_I_READ_BYTES,
+    _UNIT_I_WRITE_BYTES,
 } _UNIT_MachineInstruction;
 
 typedef struct {

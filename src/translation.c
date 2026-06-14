@@ -43,8 +43,8 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_COMPARE_LESS_EQUAL);
         NAME(UNIT_OP_COPY);
         NAME(UNIT_OP_SWAP);
-        NAME(UNIT_OP_DEREFERENCE);
-        NAME(UNIT_OP_WRITE_THROUGH);
+        NAME(UNIT_OP_READ_BYTES);
+        NAME(UNIT_OP_WRITE_BYTES);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -74,8 +74,8 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
         NAME(_UNIT_I_MUL);
         NAME(_UNIT_I_DIV);
         NAME(_UNIT_I_MOD);
-        NAME(_UNIT_I_DEREFERENCE);
-        NAME(_UNIT_I_WRITE_THROUGH);
+        NAME(_UNIT_I_READ_BYTES);
+        NAME(_UNIT_I_WRITE_BYTES);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -998,17 +998,21 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_DEREFERENCE: {
+            case UNIT_OP_READ_BYTES: {
+                INST_ASSERT_OPARG(operation->argument > 0, "must read at least 1 byte (got %d)");
+                ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
                 POP_TO_VAR(address);
                 CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_DEREFERENCE, destination, address);
+                EMIT_DEST_TWO(_UNIT_I_READ_BYTES, destination, address, bytes);
                 break;
             }
 
-            case UNIT_OP_WRITE_THROUGH: {
+            case UNIT_OP_WRITE_BYTES: {
+                INST_ASSERT_OPARG(operation->argument > 0, "must write at least 1 byte (got %d)");
+                ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
                 POP_TO_VAR(value);
                 POP_TO_VAR(address);
-                EMIT_DEST_ONE(_UNIT_I_WRITE_THROUGH, address, value);
+                EMIT_DEST_TWO(_UNIT_I_WRITE_BYTES, address, value, bytes);
                 break;
             }
         }

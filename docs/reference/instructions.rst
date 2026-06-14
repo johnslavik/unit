@@ -31,8 +31,8 @@ Instructions
    .. c:enumerator:: UNIT_OP_JUMP_IF_FALSE
    .. c:enumerator:: UNIT_OP_COPY
    .. c:enumerator:: UNIT_OP_SWAP
-   .. c:enumerator:: UNIT_OP_DEREFERENCE
-   .. c:enumerator:: UNIT_OP_WRITE_THROUGH
+   .. c:enumerator:: UNIT_OP_READ_BYTES
+   .. c:enumerator:: UNIT_OP_WRITE_BYTES
    .. c:enumerator:: UNIT_OP_CAST
    .. c:enumerator:: UNIT_OP_PUSH_VIRTUAL
 
@@ -113,12 +113,12 @@ Memory Access
    * - Opcode
      - Effect
      - Description
-   * - :c:enumerator:`UNIT_OP_DEREFERENCE`
-     - ``stack.push(*stack.pop(top))``
-     - Read the value at a memory address.
-   * - :c:enumerator:`UNIT_OP_WRITE_THROUGH`
-     - ``*stack.pop(top - 1) = stack.pop(top)``
-     - Write a value to a memory address.
+   * - :c:enumerator:`UNIT_OP_READ_BYTES`
+     - ``stack.push(read(stack.pop(top), oparg))``
+     - Read ``oparg`` bytes from a memory address.
+   * - :c:enumerator:`UNIT_OP_WRITE_BYTES`
+     - ``write(stack.pop(top - 1), stack.pop(top), oparg)``
+     - Write ``oparg`` bytes to a memory address.
 
 
 Comparisons

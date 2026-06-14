@@ -26,6 +26,8 @@ typedef enum {
 
 typedef enum {
     AMD64_MOV,
+    AMD64_MOVZX,
+    AMD64_MOV_SIZED,
     AMD64_SYSCALL,
     AMD64_RET,
     AMD64_CALL_INDIRECT,
