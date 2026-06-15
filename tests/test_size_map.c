@@ -1,6 +1,4 @@
-// test/test_size_map.c
 #include "test_util.h"
-#include <unit/unit.h>
 
 static void test_set_and_get(UNIT_Context *context)
 {
