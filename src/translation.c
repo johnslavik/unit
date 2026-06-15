@@ -5,7 +5,6 @@
 
 #include <unit/internal/allocation.h>
 #include <unit/internal/basic_block.h>
-#include <unit/internal/size_vector.h>
 #include <unit/internal/translation.h>
 
 #define NAME(name) case name: return #name

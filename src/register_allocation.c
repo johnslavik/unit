@@ -1,6 +1,5 @@
 #include <unit/internal/basic_block.h>
 #include <unit/internal/register_allocation.h>
-#include <unit/internal/size_vector.h>
 
 typedef struct {
     _UNIT_Translation *translation;

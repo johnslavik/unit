@@ -92,7 +92,7 @@ _UNIT_CodeBuffer_Patch32(_UNIT_CodeBuffer *buffer,
                          int32_t value)
 {
     assert(buffer != NULL);
-    assert((offset + 4) < buffer->size);
+    assert((offset + 4) <= buffer->size);
     buffer->data[offset + 0] = (value >> 0) & 0xFF;
     buffer->data[offset + 1] = (value >> 8) & 0xFF;
     buffer->data[offset + 2] = (value >> 16) & 0xFF;
