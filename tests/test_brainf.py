@@ -27,14 +27,17 @@ class BrainfuckTests(unittest.TestCase):
             input=source.encode("utf-8"),
             check=True,
             cwd=self.temporary.name,
+            timeout=5,
         )
         # TODO: Detect MSVC and Clang
         subprocess.run(
             ["gcc", "-o", "out", "test.o", "-lc"], check=True, cwd=self.temporary.name,
+            timeout=5,
         )
         result = subprocess.run(
             [Path(self.temporary.name) / "out"], capture_output=True, input=input_text,
             encoding="utf-8",
+            timeout=5,
         )
         assert isinstance(result.stdout, str)
         return result.stdout
@@ -51,17 +54,18 @@ class BrainfuckTests(unittest.TestCase):
         amount = ord('a')
         pluses = "+" * amount
         source = ""
-        for _ in range(25):
+        count = 25
+        for _ in range(count):
             source += f"{pluses}>"
 
-        for _ in range(25):
+        for _ in range(count):
             source += f"<"
 
-        for _ in range(25):
+        for _ in range(count):
             source += f".>"
 
         message = self._run(source)
-        self.assertEqual(message, 'a' * 25)
+        self.assertEqual(message, 'a' * count)
 
     def test_simple_loops(self) -> None:
         amount = ord('J')
