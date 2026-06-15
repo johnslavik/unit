@@ -5,12 +5,14 @@ import unittest
 from pathlib import Path
 import string
 
-BUILD_DIR = os.environ.get("BUILD_DIR", "build")
+BUILD_DIR = os.environ.get("BUILD_DIR", "./build")
 
 
 class BrainfuckTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.build_dir = Path(BUILD_DIR)
+        self.build_dir = Path(BUILD_DIR).absolute()
+        if not self.build_dir.exists():
+            raise FileNotFoundError(f"{self.build_dir} not found")
         self.temporary = tempfile.TemporaryDirectory()
         path = Path(self.temporary.name)
         self.obj = path / "test.o"
@@ -44,6 +46,29 @@ class BrainfuckTests(unittest.TestCase):
                 pluses = "+" * amount
                 result = self._run(f"{pluses}.")
                 self.assertEqual(result, char)
+
+    def test_shift(self) -> None:
+        amount = ord('a')
+        pluses = "+" * amount
+        source = ""
+        for _ in range(25):
+            source += f"{pluses}>"
+
+        for _ in range(25):
+            source += f"<"
+
+        for _ in range(25):
+            source += f".>"
+
+        message = self._run(source)
+        self.assertEqual(message, 'a' * 25)
+
+    def test_simple_loops(self) -> None:
+        amount = ord('J')
+        pluses = "+" * amount
+        source = f"{pluses}[>+<-]>."
+        result = self._run(source)
+        self.assertEqual(result, "J")
 
 
 if __name__ == "__main__":
