@@ -188,10 +188,18 @@ _UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame)
     assert(frame != NULL);
     UNIT_Size size = frame->next_slot * 8;
     assert(size >= 0);
-    if (size > 0 && size % 16 != 0) {
-        size += 16 - (size % 16);
+    if (size == 0) {
+        return 0;
     }
-    assert(size % 16 == 0);
+    // Round up so that size % 16 == 8
+    // This ensures RSP is 16-byte aligned after sub
+    // because RSP at entry is 8 mod 16 (return address)
+    if (size % 16 == 0) {
+        size += 8;
+    } else if (size % 16 != 8) {
+        size = ((size + 15) & ~15) + 8;
+    }
+    assert(size % 16 == 8);
     return size;
 }
 
