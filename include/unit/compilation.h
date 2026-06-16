@@ -22,6 +22,7 @@ typedef enum {
 typedef struct {
     UNIT_Context *context;
     UNIT_Architecture architecture;
+    const char *name;
     _UNIT_Translation _translation;
     _UNIT_CompileContext _compile_context;
 } UNIT_CompiledProcedure;

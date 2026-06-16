@@ -31,6 +31,7 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_JUMP_IF_TRUE);
         NAME(UNIT_OP_PREPARE_CALL);
         NAME(UNIT_OP_CALL_NAME);
+        NAME(UNIT_OP_CALL_PROCEDURE);
         NAME(UNIT_OP_POP_TOP);
         NAME(UNIT_OP_RETURN_VALUE);
         NAME(UNIT_OP_EXIT);
@@ -542,16 +543,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
     }
 
     if (UNIT_FAILED(_UNIT_Map_Init(&translation->strings, context, 8,
-                      _UNIT_Map_CompareEqual, _UNIT_Map_HashDirect,
-                      NULL, _UNIT_Dealloc))) {
+                    _UNIT_Map_CompareEqual, _UNIT_Map_HashDirect,
+                    NULL, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&stack);
-        _UNIT_LocalVariables_Clear(&locals);
-        return _UNIT_FAIL;
-    }
-
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&translation->symbols, context, 8))) {
-        _UNIT_Vector_Clear(&stack);
-        _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         return _UNIT_FAIL;
     }
@@ -559,17 +553,14 @@ _UNIT_Translate(_UNIT_Translation *translation,
     if (UNIT_FAILED(_UNIT_Vector_Init(&translation->blocks, context, 16,
                                       _UNIT_BasicBlock_Free))) {
         _UNIT_Vector_Clear(&stack);
-        _UNIT_SizeMap_Clear(&translation->symbols);
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         return _UNIT_FAIL;
     }
 
-
     _UNIT_SizeSet address_taken_locals;
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&address_taken_locals, context, 8))) {
         _UNIT_Vector_Clear(&stack);
-        _UNIT_SizeMap_Clear(&translation->symbols);
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         _UNIT_Vector_Clear(&translation->blocks);
@@ -579,7 +570,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
     _UNIT_Vector locals_snapshots;
     if (UNIT_FAILED(_UNIT_Vector_Init(&locals_snapshots, context, 16, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&stack);
-        _UNIT_SizeMap_Clear(&translation->symbols);
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         _UNIT_Vector_Clear(&translation->blocks);
@@ -816,6 +806,32 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
+            case UNIT_OP_PREPARE_CALL: {
+                _UNIT_Vector *vector = _UNIT_Vector_New(context, operation->argument,
+                                                        NULL);
+                if (vector == NULL) {
+                    goto error;
+                }
+                for (UNIT_Size index = 0; index < operation->argument; ++index) {
+                    POP_TO_VAR(item);
+                    _UNIT_Vector_APPEND(vector, item);
+                }
+                // We want arguments to be consumed from left to right
+                _UNIT_Vector_Reverse(vector);
+
+                _UNIT_MachineItem *args = _UNIT_Alloc(context, sizeof(_UNIT_MachineItem));
+                if (args == NULL) {
+                    _UNIT_Vector_Free(vector);
+                    goto error;
+                }
+                args->call_args = vector;
+                args->type = _UNIT_TYPE_CALL_ARGS;
+                args->hint = NULL;
+                attach_item_to_translation(translation, args);
+                PUSH_ITEM(args);
+                break;
+            }
+
             case UNIT_OP_CALL_NAME: {
                 ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
                 symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
@@ -823,6 +839,21 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
                 CREATE_DESTINATION(destination);
                 EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, symbol, args);
+                break;
+            }
+
+            case UNIT_OP_CALL_PROCEDURE: {
+                UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures, operation->argument);
+                INST_CHECK_OPARG(subprocedure != NULL, "%d is not a valid ID for a procedure");
+                ARGUMENT_TO_ITEM(procedure_id, _UNIT_TYPE_CONSTANT);
+                procedure_id->hint = subprocedure->name;
+
+                // TODO: Inlining
+                // if (should_inline(...)) _UNIT_Translate(translation, subprocedure)
+
+                POP_TO_VAR(args);
+                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
+                CREATE_DESTINATION(destination);
                 break;
             }
 
@@ -847,32 +878,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_POP_TOP: {
                 POP_TO_VAR(_unused);
-                break;
-            }
-
-            case UNIT_OP_PREPARE_CALL: {
-                _UNIT_Vector *vector = _UNIT_Vector_New(context, operation->argument,
-                                                        NULL);
-                if (vector == NULL) {
-                    goto error;
-                }
-                for (UNIT_Size index = 0; index < operation->argument; ++index) {
-                    POP_TO_VAR(item);
-                    _UNIT_Vector_APPEND(vector, item);
-                }
-                // We want arguments to be consumed from left to right
-                _UNIT_Vector_Reverse(vector);
-
-                _UNIT_MachineItem *args = _UNIT_Alloc(context, sizeof(_UNIT_MachineItem));
-                if (args == NULL) {
-                    _UNIT_Vector_Free(vector);
-                    goto error;
-                }
-                args->call_args = vector;
-                args->type = _UNIT_TYPE_CALL_ARGS;
-                args->hint = NULL;
-                attach_item_to_translation(translation, args);
-                PUSH_ITEM(args);
                 break;
             }
 
@@ -1053,7 +1058,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
                 assert(index >= 0);
                 _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
-                // XXX: Might cause problems without a copy?
                 PUSH_ITEM(item);
                 break;
             }
@@ -1096,7 +1100,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
 error:
     _UNIT_Vector_Clear(&stack);
     _UNIT_LocalVariables_Clear(&locals);
-    _UNIT_SizeMap_Clear(&translation->symbols);
     _UNIT_Map_Clear(&translation->strings);
     _UNIT_Vector_Clear(&translation->blocks);
     _UNIT_SizeSet_Clear(&address_taken_locals);
@@ -1109,7 +1112,6 @@ _UNIT_Translation_Clear(_UNIT_Translation *translation)
 {
     assert(translation != NULL);
     _UNIT_Map_Clear(&translation->strings);
-    _UNIT_SizeMap_Clear(&translation->symbols);
     _UNIT_Vector_Clear(&translation->blocks);
 
     _UNIT_MachineItem *head = translation->item_list_head;

@@ -32,9 +32,15 @@ void
 _UNIT_Relocation_Free(UNIT_Context *context, _UNIT_Relocation *relocation);
 
 typedef struct {
-    /* Contains index -> `char *` (heap allocated). */
-    const _UNIT_Vector *names;
-    /* Contains `_UNIT_PendingJump *` */
+    char *name; // Heap-allocated
+    int8_t is_defined;
+    UNIT_Size text_offset;
+} _UNIT_Symbol;
+
+typedef struct {
+    // Contains _UNIT_Symbol*
+    _UNIT_Vector symbols;
+    // Contains _UNIT_PendingJump*
     _UNIT_Vector relocations;
 } _UNIT_SymbolTable;
 

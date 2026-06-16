@@ -47,6 +47,15 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
         return _UNIT_FAIL;
     }
 
+    if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_subprocedures, context, 4, NULL))) {
+        _UNIT_Vector_Clear(&procedure->_instructions);
+        _UNIT_Vector_Clear(&procedure->_global_strings);
+        _UNIT_Vector_Clear(&procedure->_jump_labels);
+        _UNIT_Vector_Clear(&procedure->_symbols);
+        _UNIT_Vector_Clear(&procedure->_local_variables);
+        return _UNIT_FAIL;
+    }
+
     procedure->name = name;
     return _UNIT_OK;
 }
@@ -60,6 +69,7 @@ UNIT_Procedure_Clear(UNIT_Procedure *procedure)
     _UNIT_Vector_Clear(&procedure->_jump_labels);
     _UNIT_Vector_Clear(&procedure->_symbols);
     _UNIT_Vector_Clear(&procedure->_local_variables);
+    _UNIT_Vector_Clear(&procedure->_subprocedures);
 }
 
 UNIT_Procedure *
@@ -158,6 +168,34 @@ UNIT_Procedure_AddCall(UNIT_Procedure *procedure,
 
     return UNIT_Procedure_AddOperation(procedure, UNIT_OP_CALL_NAME, index);
 }
+
+UNIT_Status
+UNIT_Procedure_AddCallProcedure(UNIT_Procedure *procedure,
+                                UNIT_Procedure *target,
+                                int32_t nargs)
+{
+    if (UNIT_FAILED(UNIT_Procedure_AddOperation(procedure, UNIT_OP_PREPARE_CALL, nargs))) {
+        return _UNIT_FAIL;
+    }
+
+    char *copied = _UNIT_StrDup(procedure->context, target->name);
+    if (copied == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_symbols,
+                                        copied))) {
+        return _UNIT_FAIL;
+    }
+
+    UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_subprocedures);
+    if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_subprocedures, target))) {
+        return _UNIT_FAIL;
+    }
+
+    return UNIT_Procedure_AddOperation(procedure, UNIT_OP_CALL_PROCEDURE, index);
+}
+
 
 UNIT_Status
 UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str)

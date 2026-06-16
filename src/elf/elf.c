@@ -196,56 +196,41 @@ add_rodata_section_symbol(_UNIT_ELF_Object *object)
     return _UNIT_OK;
 }
 
-/* Adds the entry point symbol. */
 static UNIT_Status
-add_start_symbol(_UNIT_ELF_Object *object)
+add_symbols(_UNIT_ELF_Object *object,
+            const _UNIT_CompileContext *compile_context)
 {
-    _UNIT_Vector *symbols = &object->symbols;
-    assert(_UNIT_Vector_SIZE(symbols) == 2);
-    ELF_Symbol *symbol = create_and_store_symbol(object);
-    if (symbol == NULL) {
-        return _UNIT_FAIL;
-    }
-    symbol->name = append_string(object, "main");
-    if (symbol->name == -1) {
-        return _UNIT_FAIL;
-    }
-    symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
-                                   ELF_SYMBOL_TYPE_FUNCTION);
-    symbol->section_index = SECTION_TEXT;
-    symbol->size = _UNIT_CodeBuffer_CurrentIndex(object->text);
-    return _UNIT_OK;
-}
+    UNIT_Size table_index = _UNIT_Vector_SIZE(&object->symbols);
+    const _UNIT_Vector *symbols = &compile_context->symbol_table.symbols;
 
-/* Adds undefined symbols for each external function referenced
- * by the program (e.g. libc functions like putchar, getchar).
- * Also builds a mapping from internal symbol IDs (from the
- * procedure) to their indices in the ELF symbol table, so
- * relocations can reference them. */
-static UNIT_Status
-add_external_symbols(_UNIT_ELF_Object *object,
-                     const _UNIT_CompileContext *compile_context)
-{
-    UNIT_Size symtab_index = _UNIT_Vector_SIZE(&object->symbols);
-    const _UNIT_Vector *symbol_names = compile_context->symbol_table.names;
-
-    UNIT_Size size = _UNIT_Vector_SIZE(symbol_names);
+    UNIT_Size size = _UNIT_Vector_SIZE(symbols);
     for (UNIT_Size index = 0; index < size; ++index) {
-        char *name = _UNIT_Vector_GET(symbol_names, index);
-        ELF_Symbol *symbol = create_and_store_symbol(object);
-        if (symbol == NULL) {
+        _UNIT_Symbol *symbol = _UNIT_Vector_GET(symbols, index);
+        assert(symbol != NULL);
+
+        ELF_Symbol *elf_symbol = create_and_store_symbol(object);
+        if (elf_symbol == NULL) {
             return _UNIT_FAIL;
         }
-        symbol->name = append_string(object, name);
-        if (symbol->name == -1) {
+
+        elf_symbol->name = append_string(object, symbol->name);
+        if (elf_symbol->name == -1) {
             return _UNIT_FAIL;
         }
-        symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
-                                       ELF_SYMBOL_TYPE_NONE);
-        symbol->section_index = ELF_SECTION_UNDEFINED;
+
+        if (symbol->is_defined) {
+            elf_symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
+                                               ELF_SYMBOL_TYPE_FUNCTION);
+            elf_symbol->section_index = SECTION_TEXT;
+            elf_symbol->value = symbol->text_offset;
+        } else {
+            elf_symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
+                                               ELF_SYMBOL_TYPE_NONE);
+            elf_symbol->section_index = ELF_SECTION_UNDEFINED;
+        }
 
         if (UNIT_FAILED(_UNIT_SizeMap_Set(&object->symtab_indices, index,
-                                          symtab_index++))) {
+                                          table_index++))) {
             return _UNIT_FAIL;
         }
     }
@@ -398,11 +383,7 @@ build_symbol_table(_UNIT_ELF_Object *object, const _UNIT_CompileContext *context
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(add_start_symbol(object))) {
-        return _UNIT_FAIL;
-    }
-
-    if (UNIT_FAILED(add_external_symbols(object, context))) {
+    if (UNIT_FAILED(add_symbols(object, context))) {
         return _UNIT_FAIL;
     }
 

@@ -21,10 +21,11 @@ typedef enum {
     UNIT_OP_MODULO,
     _UNIT_OP_JUMP_MARKER,
     UNIT_OP_JUMP_TO,
+    UNIT_OP_PREPARE_CALL,
     UNIT_OP_CALL_NAME,
+    UNIT_OP_CALL_PROCEDURE,
     UNIT_OP_EXIT,
     UNIT_OP_POP_TOP,
-    UNIT_OP_PREPARE_CALL,
     UNIT_OP_RETURN_VALUE,
     UNIT_OP_JUMP_IF_FALSE,
     UNIT_OP_JUMP_IF_TRUE,
@@ -38,7 +39,7 @@ typedef enum {
     UNIT_OP_COPY,
     UNIT_OP_SWAP,
     UNIT_OP_READ_BYTES,
-    UNIT_OP_WRITE_BYTES
+    UNIT_OP_WRITE_BYTES,
 } UNIT_Instruction;
 
 typedef struct {
@@ -66,6 +67,7 @@ typedef struct {
     _UNIT_Vector _symbols;
     _UNIT_Vector _jump_labels;
     _UNIT_Vector _local_variables;
+    _UNIT_Vector _subprocedures;
 } UNIT_Procedure;
 
 UNIT_Status
@@ -113,5 +115,10 @@ UNIT_Procedure_AddStoreLocal(UNIT_Procedure *procedure, const char *name,
 
 UNIT_Status
 UNIT_Procedure_AddLoadLocal(UNIT_Procedure *procedure, UNIT_Local local);
+
+UNIT_Status
+UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,
+                                UNIT_Procedure *target,
+                                int32_t nargs);
 
 #endif
