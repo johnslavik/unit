@@ -138,10 +138,8 @@ _UNIT_Dealloc(UNIT_Context *context, void *ptr)
 void *
 _UNIT_Calloc(UNIT_Context *context, UNIT_Size count, UNIT_Size size)
 {
-    if (count == 0 || size == 0) {
-        return NULL;
-    }
-
+    assert(count > 0);
+    assert(size > 0);
     if (UNIT_SIZE_MAX / count < size) {
         return NULL;
     }

@@ -16,6 +16,11 @@ _UNIT_Set_Init(_UNIT_Set *set, UNIT_Context *context,
 {
     assert(set != NULL);
     assert(context != NULL);
+    assert(initial_capacity >= 0);
+    if (initial_capacity == 0) {
+        initial_capacity = 1;
+    }
+
     set->context = context;
     set->len = 0;
     set->capacity = initial_capacity;
