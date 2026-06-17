@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import os
 import unittest
 import tempfile
@@ -26,17 +27,10 @@ class ExampleTestRunner(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def compile_and_run(
-        self,
-        *,
-        build_args: list[str] | None = None,
-        run_args: list[str] | None = None,
-        build_input: str | None = None,
-        run_input: str | None = None,
-    ) -> str:
+    def compile(self, args: Iterable[str] | None = None, *, input: str | None = None) -> None:
         subprocess.run(
-            [self.build_dir / self.executable_name, *(build_args or ())],
-            input=build_input,
+            [self.build_dir / self.executable_name, *(args or ())],
+            input=input,
             check=True,
             cwd=self.temporary.name,
             encoding="utf-8",
@@ -49,10 +43,17 @@ class ExampleTestRunner(unittest.TestCase):
             cwd=self.temporary.name,
             timeout=5,
         )
+
+    def run_program(
+        self,
+        *,
+        args: list[str] | None = None,
+        input: str | None = None,
+    ) -> str:
         result = subprocess.run(
-            [Path(self.temporary.name) / "out", *(run_args or ())],
+            [Path(self.temporary.name) / "out", *(args or ())],
             capture_output=True,
-            input=run_input,
+            input=input,
             encoding="utf-8",
             cwd=self.temporary.name,
             timeout=5,

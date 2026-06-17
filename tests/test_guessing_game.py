@@ -3,8 +3,12 @@ from _test_case import ExampleTestRunner
 
 
 class TestGuessingGame(ExampleTestRunner, executable_name="unit_guess"):
+    def setUp(self) -> None:
+        super().setUp()
+        self.compile()
+
     def _run(self, *, seed: int, guesses: list[int]) -> str:
-        return self.compile_and_run(run_args=[str(seed)], run_input='\n'.join([str(i) for i in guesses]))
+        return self.run_program(args=[str(seed)], input='\n'.join([str(i) for i in guesses]))
 
     def _filter_results(self, raw: str) -> list[str]:
         results: list[str] = []

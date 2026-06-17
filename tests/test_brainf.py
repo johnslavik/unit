@@ -1,4 +1,3 @@
-import subprocess
 import unittest
 import string
 
@@ -7,7 +6,8 @@ from _test_case import ExampleTestRunner
 
 class BrainfuckTests(ExampleTestRunner, executable_name="unit_brainf"):
     def _run(self, source: str) -> str:
-        return self.compile_and_run(build_input=source)
+        self.compile(input=source)
+        return self.run_program()
 
     def test_alphabet(self) -> None:
         for char in string.ascii_letters:
