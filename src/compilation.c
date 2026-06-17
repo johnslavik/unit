@@ -658,26 +658,38 @@ UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
 
     if (UNIT_FAILED(compile_procedure_recursive(procedure, architecture, &compiled,
                                                 &visited))) {
-        _UNIT_Set_Clear(&visited);
-        _UNIT_Vector_Clear(&compiled);
-        return NULL;
+        goto error;
     }
     assert(_UNIT_Vector_SIZE(&compiled) > 0);
+
     UNIT_CompiledProcedure *parent = _UNIT_Vector_STEAL(&compiled, 0);
     assert(parent != NULL);
-    register_defined_symbol(&parent->_compile_context, procedure->name, 0);
+
+    _UNIT_Symbol *root_symbol = new_symbol(context, procedure->name);
+    if (root_symbol == NULL) {
+        goto error;
+    }
+
+    root_symbol->is_defined = 1;
+    root_symbol->text_offset = 0;
+    if (UNIT_FAILED(_UNIT_Vector_Append(&parent->_compile_context.symbol_table.symbols,
+                                        root_symbol))) {
+        goto error;
+    }
 
     if (_UNIT_Vector_SIZE(&compiled) > 1) {
         if (UNIT_FAILED(merge_compiled(context, &compiled, parent))) {
-            _UNIT_Set_Clear(&visited);
-            _UNIT_Vector_Clear(&compiled);
-            return NULL;
+            goto error;
         }
     }
 
     _UNIT_Vector_Clear(&compiled);
     _UNIT_Set_Clear(&visited);
     return parent;
+error:
+    _UNIT_Set_Clear(&visited);
+    _UNIT_Vector_Clear(&compiled);
+    return NULL;
 }
 
 UNIT_Status

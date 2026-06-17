@@ -29,7 +29,9 @@ _UNIT_Vector_Clear(_UNIT_Vector *vector)
     if (vector->dealloc != NULL) {
         for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(vector); ++index) {
             void *data = vector->items[index];
-            vector->dealloc(vector->context, data);
+            if (data != NULL) {
+                vector->dealloc(vector->context, data);
+            }
         }
     }
     _UNIT_Dealloc(vector->context, vector->items);
