@@ -13,36 +13,45 @@ const char *
 instruction_name(UNIT_Instruction instruction)
 {
     switch (instruction) {
-        NAME(UNIT_OP_LOAD_INTEGER);
         NAME(UNIT_OP_LOAD_STRING);
-        NAME(_UNIT_OP_LOAD_LOCAL_NAME);
-        NAME(_UNIT_OP_STORE_LOCAL_NAME);
+        NAME(UNIT_OP_LOAD_INTEGER);
+
         NAME(UNIT_OP_LOAD_LOCAL);
         NAME(UNIT_OP_STORE_LOCAL);
-        NAME(UNIT_OP_ADDRESS_OF);
+        NAME(_UNIT_OP_LOAD_LOCAL_NAME);
+        NAME(_UNIT_OP_STORE_LOCAL_NAME);
+
         NAME(UNIT_OP_ADD);
         NAME(UNIT_OP_SUBTRACT);
         NAME(UNIT_OP_MULTIPLY);
         NAME(UNIT_OP_DIVIDE);
         NAME(UNIT_OP_MODULO);
+
         NAME(_UNIT_OP_JUMP_MARKER);
         NAME(UNIT_OP_JUMP_TO);
         NAME(UNIT_OP_JUMP_IF_FALSE);
         NAME(UNIT_OP_JUMP_IF_TRUE);
+
+        NAME(UNIT_OP_EXIT);
+        NAME(UNIT_OP_RETURN_VALUE);
+        NAME(UNIT_OP_LOAD_ARGUMENT);
+
         NAME(UNIT_OP_PREPARE_CALL);
         NAME(UNIT_OP_CALL_NAME);
         NAME(UNIT_OP_CALL_PROCEDURE);
-        NAME(UNIT_OP_POP_TOP);
-        NAME(UNIT_OP_RETURN_VALUE);
-        NAME(UNIT_OP_EXIT);
+
         NAME(UNIT_OP_COMPARE_EQUAL);
         NAME(UNIT_OP_COMPARE_NOT_EQUAL);
         NAME(UNIT_OP_COMPARE_GREATER);
         NAME(UNIT_OP_COMPARE_GREATER_EQUAL);
         NAME(UNIT_OP_COMPARE_LESS);
         NAME(UNIT_OP_COMPARE_LESS_EQUAL);
+
         NAME(UNIT_OP_COPY);
         NAME(UNIT_OP_SWAP);
+        NAME(UNIT_OP_POP);
+
+        NAME(UNIT_OP_ADDRESS_OF);
         NAME(UNIT_OP_READ_BYTES);
         NAME(UNIT_OP_WRITE_BYTES);
     }
@@ -707,10 +716,27 @@ _UNIT_Translate(_UNIT_Translation *translation,
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
         switch (operation->instruction) {
+            /* Constants */
+
             case UNIT_OP_LOAD_INTEGER: {
                 PUSH_NEW(_UNIT_TYPE_CONSTANT, operation->argument);
                 break;
             }
+
+            case UNIT_OP_LOAD_STRING: {
+                const char *text = _UNIT_Vector_GET(&procedure->_global_strings, operation->argument);
+                INST_CHECK_OPARG(text != NULL, "%d is not a known string ID");
+                _UNIT_MachineItem *result = new_machine_item(translation, _UNIT_TYPE_CONSTANT,
+                                                             operation->argument, text);
+                if (result == NULL) {
+                    goto error;
+                }
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_ONE(_UNIT_I_LOAD_STRING, destination, result);
+                break;
+            }
+
+            /* Variables */
 
             case _UNIT_OP_STORE_LOCAL_NAME:
             case UNIT_OP_STORE_LOCAL: {
@@ -783,129 +809,27 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_ADDRESS_OF: {
-                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
-                INST_CHECK_OPARG(local_state != NULL, "local variable %d not assigned");
-                assert(local_state->stack_slot != -1);
+            /* Arithmetic */
 
-                _UNIT_MachineItem *value;
-                if (local_state->stack_slot == -1) {
-                    value = new_machine_item(translation, _UNIT_TYPE_LOCATION,
-                                             local_state->location_id, NULL);
-                } else {
-                    value = new_machine_item(translation, _UNIT_TYPE_MEMORY,
-                                             local_state->stack_slot, NULL);
-                }
-
-                if (value == NULL) {
-                    goto error;
-                }
-
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_ADDRESS_OF, destination, value);
-                break;
+#define BINARY_OPERATION(opcode, inst)                          \
+            case opcode: {                                      \
+                POP_TO_VAR(right);                              \
+                POP_TO_VAR(left);                               \
+                CREATE_DESTINATION(destination);                \
+                EMIT_DEST_TWO(inst, destination, left, right);  \
+                break;                                          \
             }
 
-            case UNIT_OP_PREPARE_CALL: {
-                _UNIT_Vector *vector = _UNIT_Vector_New(context, operation->argument,
-                                                        NULL);
-                if (vector == NULL) {
-                    goto error;
-                }
-                for (UNIT_Size index = 0; index < operation->argument; ++index) {
-                    POP_TO_VAR(item);
-                    _UNIT_Vector_APPEND(vector, item);
-                }
-                // We want arguments to be consumed from left to right
-                _UNIT_Vector_Reverse(vector);
+            BINARY_OPERATION(UNIT_OP_ADD, _UNIT_I_ADD);
+            BINARY_OPERATION(UNIT_OP_SUBTRACT, _UNIT_I_SUB);
+            BINARY_OPERATION(UNIT_OP_MULTIPLY, _UNIT_I_MUL);
+            BINARY_OPERATION(UNIT_OP_DIVIDE, _UNIT_I_DIV);
+            BINARY_OPERATION(UNIT_OP_MODULO, _UNIT_I_MOD);
 
-                _UNIT_MachineItem *args = _UNIT_Alloc(context, sizeof(_UNIT_MachineItem));
-                if (args == NULL) {
-                    _UNIT_Vector_Free(vector);
-                    goto error;
-                }
-                args->call_args = vector;
-                args->type = _UNIT_TYPE_CALL_ARGS;
-                args->hint = NULL;
-                attach_item_to_translation(translation, args);
-                PUSH_ITEM(args);
-                break;
-            }
+#undef BINARY_OPERATION
 
-            case UNIT_OP_CALL_NAME: {
-                ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
-                symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
-                POP_TO_VAR(args);
-                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, symbol, args);
-                break;
-            }
+            /* Jumps */
 
-            case UNIT_OP_CALL_PROCEDURE: {
-                UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures, operation->argument);
-                INST_CHECK_OPARG(subprocedure != NULL, "%d is not a valid ID for a procedure");
-                ARGUMENT_TO_ITEM(procedure_id, _UNIT_TYPE_CONSTANT);
-                procedure_id->hint = subprocedure->name;
-
-                // TODO: Inlining
-                // if (should_inline(...)) _UNIT_Translate(translation, subprocedure)
-
-                POP_TO_VAR(args);
-                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
-                CREATE_DESTINATION(destination);
-                break;
-            }
-
-            case UNIT_OP_LOAD_STRING: {
-                const char *text = _UNIT_Vector_GET(&procedure->_global_strings, operation->argument);
-                INST_CHECK_OPARG(text != NULL, "%d is not a known string ID");
-                _UNIT_MachineItem *result = new_machine_item(translation, _UNIT_TYPE_CONSTANT,
-                                                             operation->argument, text);
-                if (result == NULL) {
-                    goto error;
-                }
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_LOAD_STRING, destination, result);
-                break;
-            }
-
-            case UNIT_OP_EXIT: {
-                POP_TO_VAR(exit_code);
-                EMIT_DEST(_UNIT_I_EXIT, exit_code);
-                break;
-            }
-
-            case UNIT_OP_POP_TOP: {
-                POP_TO_VAR(_unused);
-                break;
-            }
-
-            case UNIT_OP_RETURN_VALUE: {
-                POP_TO_VAR(value);
-                EMIT_ONE(_UNIT_I_RETURN_VALUE, value);
-                START_NEW_BLOCK();
-                break;
-            }
-
-            case UNIT_OP_COMPARE_EQUAL:
-            case UNIT_OP_COMPARE_NOT_EQUAL:
-            case UNIT_OP_COMPARE_GREATER:
-            case UNIT_OP_COMPARE_GREATER_EQUAL:
-            case UNIT_OP_COMPARE_LESS:
-            case UNIT_OP_COMPARE_LESS_EQUAL: {
-                POP_TO_VAR(left);
-                POP_TO_VAR(right);
-                CREATE_DESTINATION(destination);
-
-                destination->type = _UNIT_TYPE_COMPARISON;
-                destination->comparison.type = operation->instruction;
-                destination->comparison.left = left;
-                destination->comparison.right = right;
-                // We intentionally don't emit any instructions here to allow
-                // for a jump to fuse it the comparison.
-                break;
-            }
 
             case _UNIT_OP_JUMP_MARKER: {
                 UNIT_JumpLabel *label;
@@ -1039,20 +963,101 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-#define BINARY_OPERATION(opcode, inst)                          \
-            case opcode: {                                      \
-                POP_TO_VAR(right);                              \
-                POP_TO_VAR(left);                               \
-                CREATE_DESTINATION(destination);                \
-                EMIT_DEST_TWO(inst, destination, left, right);  \
-                break;                                          \
+            /* Functions */
+
+            case UNIT_OP_EXIT: {
+                POP_TO_VAR(exit_code);
+                EMIT_DEST(_UNIT_I_EXIT, exit_code);
+                break;
             }
 
-            BINARY_OPERATION(UNIT_OP_ADD, _UNIT_I_ADD);
-            BINARY_OPERATION(UNIT_OP_SUBTRACT, _UNIT_I_SUB);
-            BINARY_OPERATION(UNIT_OP_MULTIPLY, _UNIT_I_MUL);
-            BINARY_OPERATION(UNIT_OP_DIVIDE, _UNIT_I_DIV);
-            BINARY_OPERATION(UNIT_OP_MODULO, _UNIT_I_MOD);
+            case UNIT_OP_RETURN_VALUE: {
+                POP_TO_VAR(value);
+                EMIT_ONE(_UNIT_I_RETURN_VALUE, value);
+                START_NEW_BLOCK();
+                break;
+            }
+
+            case UNIT_OP_LOAD_ARGUMENT: {
+                // TODO
+                break;
+            }
+
+            /* Function calls */
+
+            case UNIT_OP_PREPARE_CALL: {
+                _UNIT_Vector *vector = _UNIT_Vector_New(context, operation->argument,
+                                                        NULL);
+                if (vector == NULL) {
+                    goto error;
+                }
+                for (UNIT_Size index = 0; index < operation->argument; ++index) {
+                    POP_TO_VAR(item);
+                    _UNIT_Vector_APPEND(vector, item);
+                }
+                // We want arguments to be consumed from left to right
+                _UNIT_Vector_Reverse(vector);
+
+                _UNIT_MachineItem *args = _UNIT_Alloc(context, sizeof(_UNIT_MachineItem));
+                if (args == NULL) {
+                    _UNIT_Vector_Free(vector);
+                    goto error;
+                }
+                args->call_args = vector;
+                args->type = _UNIT_TYPE_CALL_ARGS;
+                args->hint = NULL;
+                attach_item_to_translation(translation, args);
+                PUSH_ITEM(args);
+                break;
+            }
+
+            case UNIT_OP_CALL_NAME: {
+                ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
+                symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
+                POP_TO_VAR(args);
+                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, symbol, args);
+                break;
+            }
+
+            case UNIT_OP_CALL_PROCEDURE: {
+                UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures, operation->argument);
+                INST_CHECK_OPARG(subprocedure != NULL, "%d is not a valid ID for a procedure");
+                ARGUMENT_TO_ITEM(procedure_id, _UNIT_TYPE_CONSTANT);
+                procedure_id->hint = subprocedure->name;
+
+                // TODO: Inlining
+                // if (should_inline(...)) _UNIT_Translate(translation, subprocedure)
+
+                POP_TO_VAR(args);
+                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
+                CREATE_DESTINATION(destination);
+                break;
+            }
+
+            /* Comparisons */
+
+            case UNIT_OP_COMPARE_EQUAL:
+            case UNIT_OP_COMPARE_NOT_EQUAL:
+            case UNIT_OP_COMPARE_GREATER:
+            case UNIT_OP_COMPARE_GREATER_EQUAL:
+            case UNIT_OP_COMPARE_LESS:
+            case UNIT_OP_COMPARE_LESS_EQUAL: {
+                POP_TO_VAR(left);
+                POP_TO_VAR(right);
+                CREATE_DESTINATION(destination);
+
+                destination->type = _UNIT_TYPE_COMPARISON;
+                destination->comparison.type = operation->instruction;
+                destination->comparison.left = left;
+                destination->comparison.right = right;
+                // We intentionally don't emit any instructions here to allow
+                // for a jump to fuse it the comparison.
+                break;
+            }
+
+            /* Stack manipulation */
 
             case UNIT_OP_COPY: {
                 UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
@@ -1069,6 +1074,36 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 _UNIT_MachineItem *to_swap = _UNIT_Vector_STEAL(&stack, index);
                 _UNIT_Vector_SET(&stack, index, top);
                 PUSH_ITEM(to_swap);
+                break;
+            }
+
+            case UNIT_OP_POP: {
+                POP_TO_VAR(_unused);
+                break;
+            }
+
+            /* Pointers */
+
+            case UNIT_OP_ADDRESS_OF: {
+                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                INST_CHECK_OPARG(local_state != NULL, "local variable %d not assigned");
+                assert(local_state->stack_slot != -1);
+
+                _UNIT_MachineItem *value;
+                if (local_state->stack_slot == -1) {
+                    value = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                             local_state->location_id, NULL);
+                } else {
+                    value = new_machine_item(translation, _UNIT_TYPE_MEMORY,
+                                             local_state->stack_slot, NULL);
+                }
+
+                if (value == NULL) {
+                    goto error;
+                }
+
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_ONE(_UNIT_I_ADDRESS_OF, destination, value);
                 break;
             }
 

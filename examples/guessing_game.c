@@ -65,12 +65,12 @@ int main(void)
 
     ADDOP_STR("Guessing game!\nThe number is between 1 and 100");
     ADDOP_CALL("puts", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0); // NULL
     ADDOP_CALL("time", 1);
     ADDOP_CALL("srand", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_CALL("rand", 0);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
@@ -82,7 +82,7 @@ int main(void)
     ADDOP_STR("Debug: number is %d\n");
     ADDOP_LOAD_NAME(number);
     ADDOP_CALL("printf", 2);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 
@@ -91,13 +91,13 @@ int main(void)
     // We need to consume the bad characters from the buffer
     ADDOP_STR("%*[^\n]%*c");
     ADDOP_CALL("scanf", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP_STORE_NAME(guess);
     ADDOP_STR("Not a valid number");
     ADDOP_CALL("puts", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     USE_LABEL(loop);
 
@@ -111,7 +111,7 @@ int main(void)
     ADDOP_STR("Debug: guess was %d\n");
     ADDOP_LOAD_NAME(guess);
     ADDOP_CALL("printf", 2);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_LOAD_NAME(guess)
     ADDOP_LOAD_NAME(number)
@@ -125,20 +125,20 @@ int main(void)
 
     ADDOP_STR("Lower");
     ADDOP_CALL("puts", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 
     USE_LABEL(greater);
     ADDOP_STR("Higher");
     ADDOP_CALL("puts", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
     ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 
     USE_LABEL(correct);
     ADDOP_STR("You win!");
     ADDOP_CALL("puts", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);

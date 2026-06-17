@@ -8,36 +8,54 @@
 #include <unit/internal/vector.h>
 
 typedef enum {
+    // Constants
+    UNIT_OP_LOAD_STRING,
+    UNIT_OP_LOAD_INTEGER,
+
+    // Variables
     UNIT_OP_LOAD_LOCAL,
     UNIT_OP_STORE_LOCAL,
     _UNIT_OP_LOAD_LOCAL_NAME,
     _UNIT_OP_STORE_LOCAL_NAME,
-    UNIT_OP_LOAD_STRING,
-    UNIT_OP_LOAD_INTEGER,
+
+    // Arithmetic
     UNIT_OP_ADD,
     UNIT_OP_SUBTRACT,
     UNIT_OP_MULTIPLY,
     UNIT_OP_DIVIDE,
     UNIT_OP_MODULO,
+
+    // Jumps
     _UNIT_OP_JUMP_MARKER,
     UNIT_OP_JUMP_TO,
+    UNIT_OP_JUMP_IF_FALSE,
+    UNIT_OP_JUMP_IF_TRUE,
+
+    // Functions
+    UNIT_OP_EXIT,
+    UNIT_OP_RETURN_VALUE,
+    UNIT_OP_LOAD_ARGUMENT,
+
+    // Function calls
     UNIT_OP_PREPARE_CALL,
     UNIT_OP_CALL_NAME,
     UNIT_OP_CALL_PROCEDURE,
-    UNIT_OP_EXIT,
-    UNIT_OP_POP_TOP,
-    UNIT_OP_RETURN_VALUE,
-    UNIT_OP_JUMP_IF_FALSE,
-    UNIT_OP_JUMP_IF_TRUE,
+
+    // Comparisons
     UNIT_OP_COMPARE_EQUAL,
     UNIT_OP_COMPARE_NOT_EQUAL,
     UNIT_OP_COMPARE_GREATER,
     UNIT_OP_COMPARE_GREATER_EQUAL,
     UNIT_OP_COMPARE_LESS,
     UNIT_OP_COMPARE_LESS_EQUAL,
-    UNIT_OP_ADDRESS_OF,
+
+    // Stack manipulation
     UNIT_OP_COPY,
     UNIT_OP_SWAP,
+    UNIT_OP_POP,
+
+    // Pointers
+    UNIT_OP_ADDRESS_OF,
     UNIT_OP_READ_BYTES,
     UNIT_OP_WRITE_BYTES,
 } UNIT_Instruction;

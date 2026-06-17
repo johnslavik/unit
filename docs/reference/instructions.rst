@@ -14,7 +14,7 @@ Instructions
    .. c:enumerator:: UNIT_OP_MODULO
    .. c:enumerator:: UNIT_OP_RETURN_VALUE
    .. c:enumerator:: UNIT_OP_EXIT
-   .. c:enumerator:: UNIT_OP_POP_TOP
+   .. c:enumerator:: UNIT_OP_POP
    .. c:enumerator:: UNIT_OP_PREPARE_CALL
    .. c:enumerator:: UNIT_OP_CALL_NAME
    .. c:enumerator:: UNIT_OP_STORE_LOCAL
@@ -203,7 +203,7 @@ Stack Manipulation
    * - Opcode
      - Effect
      - Description
-   * - :c:enumerator:`UNIT_OP_POP_TOP`
+   * - :c:enumerator:`UNIT_OP_POP`
      - ``stack.pop(top)``
      - Discard the value on top of the stack.
    * - :c:enumerator:`UNIT_OP_COPY`
