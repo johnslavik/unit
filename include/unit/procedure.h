@@ -60,7 +60,6 @@ typedef enum {
     UNIT_OP_WRITE_BYTES,
 
     // Casting
-    UNIT_OP_CAST,
     UNIT_OP_CONVERT
 } UNIT_Instruction;
 

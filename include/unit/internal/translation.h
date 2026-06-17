@@ -30,7 +30,6 @@ typedef struct _UNIT_MachineItem {
             UNIT_Instruction type; // One of the comparison instructions
         } comparison;
     };
-    UNIT_IntegerType integer_type;
     const char *hint;
     // Next node in the machine item linked list
     struct _UNIT_MachineItem *next;

@@ -55,7 +55,6 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_READ_BYTES);
         NAME(UNIT_OP_WRITE_BYTES);
 
-        NAME(UNIT_OP_CAST);
         NAME(UNIT_OP_CONVERT);
     }
     _UNIT_Unreachable();
@@ -1148,13 +1147,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_CAST: {
-                POP_TO_VAR(top);
-                top->integer_type = operation->argument;
-                PUSH_ITEM(top);
-                break;
-            }
-
             case UNIT_OP_CONVERT: {
                 POP_TO_VAR(value);
                 _UNIT_MachineItem *type_item = new_machine_item(translation,
@@ -1165,7 +1157,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
                 CREATE_DESTINATION(destination);
-                destination->integer_type = operation->argument;
                 EMIT_DEST_TWO(_UNIT_I_CONVERT, destination, value, type_item);
                 break;
             }
