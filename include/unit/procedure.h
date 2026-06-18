@@ -1,6 +1,8 @@
 #ifndef UNIT_PROCEDURE_H
 #define UNIT_PROCEDURE_H
 
+#include <stdio.h>
+
 #include <unit/base.h>
 #include <unit/context.h>
 
@@ -73,7 +75,7 @@ typedef struct {
 } _UNIT_Operation;
 
 typedef struct {
-    const char *name;
+    char *name;
     int32_t id;
     // This is a _UNIT_BasicBlock * -- we hide it to avoid exposing that type
     // publicly.
@@ -97,7 +99,7 @@ typedef enum {
 
 typedef struct {
     UNIT_Context *context;
-    const char *name;
+    char *name;
     _UNIT_Vector _instructions;
     _UNIT_Vector _global_strings;
     _UNIT_Vector _symbols;
@@ -138,9 +140,9 @@ UNIT_Procedure_AddJump(UNIT_Procedure *procedure, UNIT_Instruction instruction,
                        UNIT_JumpLabel *jump_label);
 
 UNIT_Status
-UNIT_Procedure_AddCall(UNIT_Procedure *procedure,
-                       const char *name,
-                       UNIT_Size num_arguments);
+UNIT_Procedure_AddCallName(UNIT_Procedure *procedure,
+                           const char *name,
+                           UNIT_Size num_arguments);
 
 UNIT_Status
 UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str);
@@ -156,6 +158,12 @@ UNIT_Status
 UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,
                                 UNIT_Procedure *target,
                                 uint8_t nargs);
+
+const char *
+UNIT_Instruction_GetName(UNIT_Instruction instruction);
+
+void
+UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream);
 
 #ifdef __cplusplus
 }

@@ -9,9 +9,9 @@
 
 #define ADDOP(op) ADDOP_INT(op, 0)
 
-#define ADDOP_CALL(name, argc)                                          \
-    if (UNIT_FAILED(UNIT_Procedure_AddCall(procedure, name, argc))) {   \
-        return -1;                                                      \
+#define ADDOP_CALL(name, argc)                                              \
+    if (UNIT_FAILED(UNIT_Procedure_AddCallName(procedure, name, argc))) {   \
+        return -1;                                                          \
     }
 
 #define ADDOP_STORE_NAME(name)                                                  \

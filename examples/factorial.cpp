@@ -39,6 +39,8 @@ int main(void)
     procedure.load_integer(0);
     procedure.return_value();
 
+    procedure.print_instructions();
+
     auto compiled = procedure.compile(unit::Platform::host());
     compiled.write_object_file("test.o", unit::ExecutableFormat::ELF);
     return 0;

@@ -392,7 +392,7 @@ public:
     void
     call_name(const std::string &name, uint8_t nargs)
     {
-        if (UNIT_FAILED(UNIT_Procedure_AddCall(&procedure, name.c_str(), nargs))) {
+        if (UNIT_FAILED(UNIT_Procedure_AddCallName(&procedure, name.c_str(), nargs))) {
             throw error(procedure.context);
         }
     }
@@ -529,6 +529,12 @@ public:
         }
 
         return CompiledProcedure(compiled);
+    }
+
+    void
+    print_instructions(FILE *stream = stdout)
+    {
+        UNIT_Procedure_PrintInstructions(&procedure, stream);
     }
 
     Procedure(const Procedure &) = delete;

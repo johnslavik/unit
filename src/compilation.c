@@ -639,6 +639,13 @@ merge_compiled(UNIT_Context *context, _UNIT_Vector *compiled,
     return _UNIT_OK;
 }
 
+void
+free_compiled_procedure_ctx(UNIT_Context *context, void *ptr)
+{
+    UNIT_CompiledProcedure *compiled = (UNIT_CompiledProcedure *)ptr;
+    UNIT_CompiledProcedure_Free(compiled);
+}
+
 UNIT_CompiledProcedure *
 UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Platform platform)
 {
@@ -650,7 +657,7 @@ UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Platform platform)
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&compiled, procedure->context,
                                       _UNIT_Vector_SIZE(&procedure->_subprocedures),
-                                      (UNIT_Destructor)UNIT_CompiledProcedure_Free))) {
+                                      free_compiled_procedure_ctx))) {
         return NULL;
     }
 

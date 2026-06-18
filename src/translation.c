@@ -2,63 +2,13 @@
 #include <stdlib.h>
 
 #include <unit/errors.h>
+#include <unit/procedure.h>
 
 #include <unit/internal/allocation.h>
 #include <unit/internal/basic_block.h>
 #include <unit/internal/translation.h>
 
 #define NAME(name) case name: return #name
-
-const char *
-instruction_name(UNIT_Instruction instruction)
-{
-    switch (instruction) {
-        NAME(UNIT_OP_LOAD_STRING);
-        NAME(UNIT_OP_LOAD_INTEGER);
-
-        NAME(UNIT_OP_LOAD_LOCAL);
-        NAME(UNIT_OP_STORE_LOCAL);
-        NAME(_UNIT_OP_LOAD_LOCAL_NAME);
-        NAME(_UNIT_OP_STORE_LOCAL_NAME);
-
-        NAME(UNIT_OP_ADD);
-        NAME(UNIT_OP_SUBTRACT);
-        NAME(UNIT_OP_MULTIPLY);
-        NAME(UNIT_OP_DIVIDE);
-        NAME(UNIT_OP_MODULO);
-
-        NAME(_UNIT_OP_JUMP_MARKER);
-        NAME(UNIT_OP_JUMP_TO);
-        NAME(UNIT_OP_JUMP_IF_FALSE);
-        NAME(UNIT_OP_JUMP_IF_TRUE);
-
-        NAME(UNIT_OP_EXIT);
-        NAME(UNIT_OP_RETURN_VALUE);
-        NAME(UNIT_OP_LOAD_ARGUMENT);
-
-        NAME(UNIT_OP_PREPARE_CALL);
-        NAME(UNIT_OP_CALL_NAME);
-        NAME(UNIT_OP_CALL_PROCEDURE);
-
-        NAME(UNIT_OP_COMPARE_EQUAL);
-        NAME(UNIT_OP_COMPARE_NOT_EQUAL);
-        NAME(UNIT_OP_COMPARE_GREATER);
-        NAME(UNIT_OP_COMPARE_GREATER_EQUAL);
-        NAME(UNIT_OP_COMPARE_LESS);
-        NAME(UNIT_OP_COMPARE_LESS_EQUAL);
-
-        NAME(UNIT_OP_COPY);
-        NAME(UNIT_OP_SWAP);
-        NAME(UNIT_OP_POP);
-
-        NAME(UNIT_OP_ADDRESS_OF);
-        NAME(UNIT_OP_READ_BYTES);
-        NAME(UNIT_OP_WRITE_BYTES);
-
-        NAME(UNIT_OP_CONVERT);
-    }
-    _UNIT_Unreachable();
-}
 
 const char *
 machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
@@ -182,9 +132,9 @@ print_machine_item(_UNIT_MachineItem *item)
 {
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        printf("constant(%ld)", item->value);
+        printf("%ld", item->value);
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        printf("location(%ld)", item->value);
+        printf("location_%ld", item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         printf("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
@@ -423,7 +373,7 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
     if (_UNIT_Vector_SIZE(stack) == 0) {
         _UNIT_SetErrorFormat(block->context, UNIT_ERROR_INVALID_USAGE,
                              "stack underflow at %s",
-                             instruction_name(operation->instruction));
+                             UNIT_Instruction_GetName(operation->instruction));
         return NULL;
     }
     _UNIT_MachineItem *result = _UNIT_Vector_Pop(stack);
@@ -713,21 +663,21 @@ _UNIT_Translate(_UNIT_Translation *translation,
         }                                                                                           \
         PUSH_ITEM(name);
 
-    #define INST_CHECK(condition, message)                                          \
-        if (!(condition)) {                                                         \
-            _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,         \
-                                 "error at %s (index %d): " message,                \
-                                 instruction_name(operation->instruction), index);  \
-            goto error;                                                             \
+    #define INST_CHECK(condition, message)                                                  \
+        if (!(condition)) {                                                                 \
+            _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,                 \
+                                 "error at %s (index %d): " message,                        \
+                                 UNIT_Instruction_GetName(operation->instruction), index);  \
+            goto error;                                                                     \
         }
 
-    #define INST_CHECK_FMT(condition, message, ...)                                 \
-        if (!(condition)) {                                                         \
-            _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,         \
-                                 "error at %s (index %d): " message,                \
-                                 instruction_name(operation->instruction), index,   \
-                                 __VA_ARGS__);                                      \
-            goto error;                                                             \
+    #define INST_CHECK_FMT(condition, message, ...)                                         \
+        if (!(condition)) {                                                                 \
+            _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,                 \
+                                 "error at %s (index %d): " message,                        \
+                                 UNIT_Instruction_GetName(operation->instruction), index,   \
+                                 __VA_ARGS__);                                              \
+            goto error;                                                                     \
         }
     #define INST_CHECK_OPARG(condition, message) INST_CHECK_FMT(condition, message, operation->argument)
 
@@ -1045,7 +995,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_CALL_PROCEDURE: {
                 UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures, operation->argument);
-                INST_CHECK_OPARG(subprocedure != NULL, "%d is not a valid ID for a procedure");
+                assert(subprocedure != NULL);
                 ARGUMENT_TO_ITEM(procedure_id, _UNIT_TYPE_CONSTANT);
                 procedure_id->hint = subprocedure->name;
 
@@ -1055,6 +1005,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 POP_TO_VAR(args);
                 INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
                 CREATE_DESTINATION(destination);
+                EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, procedure_id, args);
                 break;
             }
 

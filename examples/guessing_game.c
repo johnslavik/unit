@@ -21,8 +21,8 @@ int main(void)
     }
 #define ADDOP(name) ADDOP_INT(name, 0)
 
-#define ADDOP_CALL(func, argc)                                                        \
-    if (UNIT_FAILED(UNIT_Procedure_AddCall(&procedure, func, argc))) {                \
+#define ADDOP_CALL(func, argc)                                                      \
+    if (UNIT_FAILED(UNIT_Procedure_AddCallName(&procedure, func, argc))) {          \
         goto error;                                                                 \
     }
 
