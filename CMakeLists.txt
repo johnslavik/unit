@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 
 project(unit C)
 
@@ -14,6 +14,8 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 option(UNIT_BUILD_EXAMPLES "Build example programs" OFF)
 
@@ -68,6 +70,15 @@ if(UNIT_BUILD_TESTS)
         DEPENDS ${TEST_TARGETS}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
+endif()
+
+option(UNIT_BUILD_PYTHON "Build Python bindings" OFF)
+
+if(UNIT_BUILD_PYTHON)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+    Python3_add_library(_unit MODULE python/unit/core.c)
+    target_link_libraries(_unit PRIVATE unit)
+    install(TARGETS _unit DESTINATION _unit)
 endif()
 
 include(GNUInstallDirs)

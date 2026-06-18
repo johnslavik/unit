@@ -9,6 +9,9 @@
 extern "C" {
 #endif
 
+const char *
+UNIT_ErrorCode_ToString(UNIT_ErrorCode code);
+
 UNIT_ErrorCode
 UNIT_GetErrorCode(const UNIT_Context *context);
 
