@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 #include <unit/errors.h>
 #include <unit/procedure.h>
@@ -8,36 +7,36 @@
 #include <unit/internal/basic_block.h>
 #include <unit/internal/translation.h>
 
-#define NAME(name) case name: return #name
+#define NAME(name) case _UNIT_I_ ##name: return #name
 
 const char *
 machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
 {
     switch (machine_instruction) {
-        NAME(_UNIT_I_MOVE);
-        NAME(_UNIT_I_JUMP_LABEL);
-        NAME(_UNIT_I_CALL_SYMBOL);
-        NAME(_UNIT_I_JUMP);
-        NAME(_UNIT_I_EXIT);
-        NAME(_UNIT_I_RETURN_VALUE);
-        NAME(_UNIT_I_COMPARE_EQUAL);
-        NAME(_UNIT_I_JUMP_IF_EQUAL);
-        NAME(_UNIT_I_JUMP_IF_NOT_EQUAL);
-        NAME(_UNIT_I_JUMP_IF_LESS);
-        NAME(_UNIT_I_JUMP_IF_LESS_EQUAL);
-        NAME(_UNIT_I_JUMP_IF_GREATER);
-        NAME(_UNIT_I_JUMP_IF_GREATER_EQUAL);
-        NAME(_UNIT_I_LOAD_STRING);
-        NAME(_UNIT_I_ADDRESS_OF);
-        NAME(_UNIT_I_ADD);
-        NAME(_UNIT_I_SUB);
-        NAME(_UNIT_I_MUL);
-        NAME(_UNIT_I_DIV);
-        NAME(_UNIT_I_MOD);
-        NAME(_UNIT_I_READ_BYTES);
-        NAME(_UNIT_I_WRITE_BYTES);
-        NAME(_UNIT_I_LOAD_ARGUMENT);
-        NAME(_UNIT_I_CONVERT);
+        NAME(MOVE);
+        NAME(JUMP_LABEL);
+        NAME(CALL_SYMBOL);
+        NAME(JUMP);
+        NAME(EXIT);
+        NAME(RETURN_VALUE);
+        NAME(COMPARE_EQUAL);
+        NAME(JUMP_IF_EQUAL);
+        NAME(JUMP_IF_NOT_EQUAL);
+        NAME(JUMP_IF_LESS);
+        NAME(JUMP_IF_LESS_EQUAL);
+        NAME(JUMP_IF_GREATER);
+        NAME(JUMP_IF_GREATER_EQUAL);
+        NAME(LOAD_STRING);
+        NAME(ADDRESS_OF);
+        NAME(ADD);
+        NAME(SUB);
+        NAME(MUL);
+        NAME(DIV);
+        NAME(MOD);
+        NAME(READ_BYTES);
+        NAME(WRITE_BYTES);
+        NAME(LOAD_ARGUMENT);
+        NAME(CONVERT);
     }
     _UNIT_Unreachable();
 }
@@ -128,64 +127,64 @@ emit_machine_instruction(UNIT_Context *context,
 }
 
 void
-print_machine_item(_UNIT_MachineItem *item)
+print_machine_item(FILE *stream, _UNIT_MachineItem *item)
 {
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        printf("%ld", item->value);
+        fprintf(stream, "%ld", item->value);
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        printf("location_%ld", item->value);
+        fprintf(stream, "location_%ld", item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
-        printf("[");
+        fprintf(stream, "[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
         for (UNIT_Size index = 0; index < size; ++index) {
             _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(item->call_args, index);
             assert(arg_item != NULL);
-            print_machine_item(arg_item);
+            print_machine_item(stream, arg_item);
             if (index + 1 != size) {
-                printf(", ");
+                fprintf(stream, ", ");
             }
         }
-        printf("]");
+        fprintf(stream, "]");
     } else if (item->type == _UNIT_TYPE_COMPARISON) {
-        print_machine_item(item->comparison.left);
+        print_machine_item(stream, item->comparison.left);
         switch (item->comparison.type) {
             case UNIT_OP_COMPARE_EQUAL:
-                printf(" == ");
+                fprintf(stream, " == ");
                 break;
             case UNIT_OP_COMPARE_NOT_EQUAL:
-                printf(" != ");
+                fprintf(stream, " != ");
                 break;
             case UNIT_OP_COMPARE_LESS:
-                printf(" < ");
+                fprintf(stream, " < ");
                 break;
             case UNIT_OP_COMPARE_LESS_EQUAL:
-                printf(" <= ");
+                fprintf(stream, " <= ");
                 break;
             case UNIT_OP_COMPARE_GREATER:
-                printf(" > ");
+                fprintf(stream, " > ");
                 break;
             case UNIT_OP_COMPARE_GREATER_EQUAL:
-                printf(" >= ");
+                fprintf(stream, " >= ");
                 break;
             default:
                 _UNIT_Unreachable();
         }
-        print_machine_item(item->comparison.right);
+        print_machine_item(stream, item->comparison.right);
     } else if (item->type == _UNIT_TYPE_MEMORY) {
-        printf("stack_slot_%ld", item->value);
+        fprintf(stream, "stack_slot_%ld", item->value);
     } else {
         assert(item->type == _UNIT_TYPE_REGISTER);
-        printf("register_%ld", item->value);
+        fprintf(stream, "register_%ld", item->value);
     }
 
     if (item->hint != NULL) {
-        printf(" (%s)", item->hint);
+        fprintf(stream, " (%s)", item->hint);
     }
 }
 
 static void
-print_instruction_stream(_UNIT_Vector *instructions)
+print_instruction_stream(FILE *stream, _UNIT_Vector *instructions)
 {
     assert(instructions != NULL);
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
@@ -197,51 +196,53 @@ print_instruction_stream(_UNIT_Vector *instructions)
             assert(operation->destination != NULL);
             assert(operation->destination->hint != NULL);
             // There should be a "block ..." right before this
-            printf(", label %s (%ld):\n", operation->destination->hint,
-                   operation->destination->value);
+            fprintf(stream, ", label %s (%ld):\n", operation->destination->hint,
+                    operation->destination->value);
             continue;
         }
         assert(operation != NULL);
+        fprintf(stream, "        ");
         if (operation->destination != NULL) {
-            printf("  ");
-            print_machine_item(operation->destination);
-            printf(" = ");
-        } else {
-            printf("  ");
+            print_machine_item(stream, operation->destination);
+            fprintf(stream, " = ");
         }
 
-        printf("%s(", machine_instruction_name(operation->instruction));
+        fprintf(stream, "%s(", machine_instruction_name(operation->instruction));
         if (operation->argument_1 != NULL) {
-            print_machine_item(operation->argument_1);
+            print_machine_item(stream, operation->argument_1);
         }
 
         if (operation->argument_2 != NULL) {
             assert(operation->argument_1 != NULL || operation->destination != NULL);
-            printf(", ");
-            print_machine_item(operation->argument_2);
+            fprintf(stream, ", ");
+            print_machine_item(stream, operation->argument_2);
         }
-        printf(")\n");
+        fprintf(stream, ")\n");
     }
 }
 
 void
-_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation)
+_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
+                                    const char *name,
+                                    FILE *stream)
 {
     assert(translation != NULL);
+    assert(name != NULL);
+    fprintf(stream, "translation for \"%s\":\n", name);
     UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
         assert(block != NULL);
-        printf("block %ld", block->id);
+        fprintf(stream, "    block %ld", block->id);
         if (block->label_id != _UNIT_BasicBlock_NO_LABEL) {
             // We don't have access to the label name here, but the
             // instructions do. The jump label will be the first instruction
             // and will print out the name for us, so we don't want to print
             // a newline.
         } else {
-            printf("\n");
+            fprintf(stream, "\n");
         }
-        print_instruction_stream(&block->instructions);
+        print_instruction_stream(stream, &block->instructions);
     }
 }
 

@@ -39,9 +39,11 @@ int main(void)
     procedure.load_integer(0);
     procedure.return_value();
 
+    factorial.print_instructions();
     procedure.print_instructions();
 
     auto compiled = procedure.compile(unit::Platform::host());
+    compiled.print_translated();
     compiled.write_object_file("test.o", unit::ExecutableFormat::ELF);
     return 0;
 }

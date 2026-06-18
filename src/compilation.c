@@ -370,8 +370,6 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         goto error;
     }
 
-    _UNIT_Translation_PrintInstructions(&compiled_procedure->_translation);
-
     if (UNIT_FAILED(build_constant_data(&compiled_procedure->_compile_context.string_data,
                                         &procedure->_global_strings))) {
         goto error;
@@ -412,6 +410,8 @@ compile_and_store_procedure(const UNIT_Procedure *procedure, UNIT_Platform platf
     if (compiled_procedure == NULL) {
         return NULL;
     }
+
+    UNIT_CompiledProcedure_PrintTranslatedIR(compiled_procedure, stdout);
 
     if (UNIT_FAILED(_UNIT_Vector_Append(compiled, compiled_procedure))) {
         return NULL;
@@ -715,5 +715,20 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
     switch (format) {
         case UNIT_FORMAT_ELF:
             return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context, path);
+        default:
+            _UNIT_SetError(compiled->context, UNIT_ERROR_UNSUPPORTED_PLATFORM,
+                           "only ELF is supported at the moment");
+            return _UNIT_FAIL;
     }
+
+    _UNIT_Unreachable();
+}
+
+void
+UNIT_CompiledProcedure_PrintTranslatedIR(const UNIT_CompiledProcedure *compiled,
+                                         FILE *stream)
+{
+    assert(compiled != NULL);
+    assert(stream != NULL);
+    _UNIT_Translation_PrintInstructions(&compiled->_translation, compiled->name, stream);
 }

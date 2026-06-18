@@ -360,10 +360,10 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
             UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels, operation->argument);
             assert(label != NULL);
             assert(label->name != NULL);
-            fprintf(stream, "  label %s:\n", label->name);
+            fprintf(stream, "    label %s:\n", label->name);
         }
 
-        fprintf(stream, "    %s", UNIT_Instruction_GetName(operation->instruction));
+        fprintf(stream, "        %s", UNIT_Instruction_GetName(operation->instruction));
         if (operation->argument != 0
             || operation->instruction == UNIT_OP_LOAD_INTEGER
             || operation->instruction == UNIT_OP_LOAD_ARGUMENT) {

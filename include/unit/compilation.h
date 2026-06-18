@@ -36,6 +36,9 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
                                        UNIT_ExecutableFormat format);
 
 void
+UNIT_CompiledProcedure_PrintTranslatedIR(const UNIT_CompiledProcedure *compiled, FILE *stream);
+
+void
 UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled);
 
 #ifdef __cplusplus

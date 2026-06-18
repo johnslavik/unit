@@ -107,7 +107,8 @@ void
 _UNIT_Translation_Clear(_UNIT_Translation *translation);
 
 void
-_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation);
+_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation, const char *name,
+                                    FILE *stream);
 
 #ifdef __cplusplus
 }

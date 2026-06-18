@@ -87,6 +87,12 @@ public:
         }
     }
 
+    void
+    print_translated(FILE *stream = stdout)
+    {
+        UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stream);
+    }
+
     CompiledProcedure(const CompiledProcedure &) = delete;
     CompiledProcedure &operator=(const CompiledProcedure &) = delete;
 };
