@@ -160,7 +160,7 @@ ProcedureObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 
     PyObject *context_op;
     const char *name;
-    if (PyArg_ParseTuple(args, "O!s", state->ContextType, &context_op, &name) < 0) {
+    if (!PyArg_ParseTuple(args, "O!s", state->ContextType, &context_op, &name)) {
         return NULL;
     }
 
@@ -189,7 +189,7 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
     UNIT_Instruction instruction;
     int64_t oparg;
 
-    if (PyArg_ParseTuple(args, "iL", &instruction, &oparg) < 0) {
+    if (!PyArg_ParseTuple(args, "iL", &instruction, &oparg)) {
         return NULL;
     }
 

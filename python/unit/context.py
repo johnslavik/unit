@@ -37,6 +37,7 @@ class Context:
 
 
 class Procedure:
-    def __init__(self, *, context: Context | None = None) -> None:
+    def __init__(self, name: str, *, context: Context | None = None) -> None:
         self.context = context or Context.current_or_new()
-        self._procedure = _core.Procedure(self.context._context)
+        self.name = name
+        self._procedure = _core.Procedure(self.context._context, name)
