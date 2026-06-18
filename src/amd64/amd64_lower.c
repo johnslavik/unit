@@ -3,10 +3,11 @@
 
 #include <unit/platform.h>
 
+#include <unit/internal/architectures.h>
 #include <unit/internal/basic_block.h>
 #include <unit/internal/compile_context.h>
+#include <unit/internal/size_vector.h>
 #include <unit/internal/translation.h>
-#include <unit/internal/architectures.h>
 
 #include "amd64_local.h"
 
@@ -268,10 +269,12 @@ restore_register(_UNIT_CompileContext *compile_context, AMD64_Register preserved
 static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
                     _UNIT_MachineOperation *operation,
-                    UNIT_ABI abi)
+                    UNIT_ABI abi,
+                    _UNIT_SizeVector *epilogue_patches)
 {
     assert(compile_context != NULL);
     assert(operation != NULL);
+    assert(epilogue_patches != NULL);
     UNIT_Context *ctx = compile_context->context;
 
 #define OP(value) machine_item_to_operand(operation->value)
@@ -404,7 +407,12 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
         case _UNIT_I_RETURN_VALUE: {
             EMIT(mov(ctx, reg(REG_RAX), OP(argument_1)));
-            // ret() will be emitted after the loop
+            // Reserve 7 bytes for the epilogue
+            UNIT_Size patch_offset = _UNIT_CodeBuffer_Reserve(&compile_context->buffer, 7);
+            if (UNIT_FAILED(_UNIT_SizeVector_Append(epilogue_patches, patch_offset))) {
+                return _UNIT_FAIL;
+            }
+            EMIT(ret(ctx));
             break;
         }
 
@@ -580,6 +588,20 @@ translate_operation(_UNIT_CompileContext *compile_context,
 #undef OP
 }
 
+static void
+patch_epilogues(_UNIT_CompileContext *compile_context, _UNIT_SizeVector *epilogue_patches,
+                UNIT_Size frame_size)
+{
+    assert(compile_context != NULL);
+    assert(epilogue_patches != NULL);
+    assert(frame_size >= 0);
+    UNIT_Size size = _UNIT_SizeVector_SIZE(epilogue_patches);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        UNIT_Size epilogue_offset = _UNIT_SizeVector_GET(epilogue_patches, index);
+        AMD64_PatchEpilogue(compile_context, epilogue_offset, frame_size);
+    }
+}
+
 UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                     _UNIT_CompileContext *compile_context,
@@ -588,6 +610,12 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
     // We'll patch it once we know the final frame size.
     UNIT_Size prologue_offset = _UNIT_CodeBuffer_Reserve(&compile_context->buffer, 7);
+
+    // Same thing for the epilogue, but there can be multiple places that need patching.
+    _UNIT_SizeVector epilogue_patches;
+    if (UNIT_FAILED(_UNIT_SizeVector_Init(&epilogue_patches, compile_context->context, 4))) {
+        return _UNIT_FAIL;
+    }
 
     assert(translation != NULL);
     UNIT_Size blocks_size = _UNIT_Vector_SIZE(&translation->blocks);
@@ -599,21 +627,18 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
             _UNIT_MachineOperation *operation = _UNIT_Vector_GET(&block->instructions,
                                                                 index);
             assert(operation != NULL);
-            if (UNIT_FAILED(translate_operation(compile_context, operation, abi))) {
+            if (UNIT_FAILED(translate_operation(compile_context, operation, abi, &epilogue_patches))) {
+                _UNIT_SizeVector_Clear(&epilogue_patches);
                 return _UNIT_FAIL;
             }
         }
     }
 
-    // Align frame size before patching anything
-    UNIT_Context *ctx = compile_context->context;
     UNIT_Size frame_size = _UNIT_StackFrame_ComputeSize(&compile_context->stack_frame);
-    if (frame_size > 0) {
-        EMIT(add(ctx, reg(REG_RSP), immediate(frame_size)));
-    }
-    EMIT(ret(ctx));
-
     AMD64_PatchPrologue(compile_context, prologue_offset, frame_size);
+    patch_epilogues(compile_context, &epilogue_patches, frame_size);
     AMD64_PatchJumps(compile_context);
+
+    _UNIT_SizeVector_Clear(&epilogue_patches);
     return _UNIT_OK;
 }

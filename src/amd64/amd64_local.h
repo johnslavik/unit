@@ -95,11 +95,16 @@ AMD64_encode_instruction(_UNIT_CompileContext *context,
                          AMD64_Instruction *instr);
 
 void
-AMD64_PatchJumps(_UNIT_CompileContext *context);
-
-void
 AMD64_PatchPrologue(_UNIT_CompileContext *context,
                     UNIT_Size prologue_offset,
                     UNIT_Size frame_size);
+
+void
+AMD64_PatchEpilogue(_UNIT_CompileContext *compile_context,
+                    UNIT_Size epilogue_offset,
+                    UNIT_Size frame_size);
+
+void
+AMD64_PatchJumps(_UNIT_CompileContext *context);
 
 #endif

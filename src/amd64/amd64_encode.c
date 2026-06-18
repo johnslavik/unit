@@ -58,6 +58,7 @@ enum {
     OPCODE_CALL_REL32 = 0xE8,
     OPCODE_LEA = 0x8D,
     OPCODE_CQO = 0x99,
+    OPCODE_NOP = 0x90,
 };
 
 // Multi-purpose opcodes (specify the actual thing using ModRM)
@@ -641,16 +642,24 @@ error:
 }
 
 void
-AMD64_PatchPrologue(_UNIT_CompileContext *context,
+AMD64_PatchPrologue(_UNIT_CompileContext *compile_context,
                     UNIT_Size prologue_offset,
                     UNIT_Size frame_size)
 {
-    assert(context != NULL);
+    assert(compile_context != NULL);
     assert(prologue_offset >= 0);
     assert(frame_size >= 0);
     if (frame_size == 0) {
-        uint8_t nops[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
-        _UNIT_CodeBuffer_PatchBytes(&context->buffer, prologue_offset,
+        uint8_t nops[] = {
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP
+        };
+        _UNIT_CodeBuffer_PatchBytes(&compile_context->buffer, prologue_offset,
                                     nops, 7);
         return;
     }
@@ -664,25 +673,61 @@ AMD64_PatchPrologue(_UNIT_CompileContext *context,
         (frame_size >> 16) & 0xFF,
         (frame_size >> 24) & 0xFF,
     };
-    _UNIT_CodeBuffer_PatchBytes(&context->buffer, prologue_offset,
+    _UNIT_CodeBuffer_PatchBytes(&compile_context->buffer, prologue_offset,
                                 prologue, 7);
 }
 
 void
-AMD64_PatchJumps(_UNIT_CompileContext *context)
+AMD64_PatchEpilogue(_UNIT_CompileContext *compile_context,
+                    UNIT_Size epilogue_offset,
+                    UNIT_Size frame_size)
 {
-    assert(context != NULL);
-    UNIT_Size count = _UNIT_Vector_SIZE(&context->jump_table.pending_jumps);
+    assert(compile_context != NULL);
+    assert(epilogue_offset >= 0);
+    assert(frame_size >= 0);
+    if (frame_size == 0) {
+        uint8_t nops[] = {
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP,
+            OPCODE_NOP
+        };
+        _UNIT_CodeBuffer_PatchBytes(&compile_context->buffer, epilogue_offset,
+                                    nops, 7);
+        return;
+    }
+
+    uint8_t epilogue[] = {
+        rex(1, 0, 0, 0),
+        OPCODE_GROUP1_IMM32,
+        modrm(MOD_REGISTER, GROUP1_ADD, REG_RSP),
+        (frame_size >> 0) & 0xFF,
+        (frame_size >> 8) & 0xFF,
+        (frame_size >> 16) & 0xFF,
+        (frame_size >> 24) & 0xFF,
+    };
+    _UNIT_CodeBuffer_PatchBytes(&compile_context->buffer, epilogue_offset,
+                                epilogue, 7);
+}
+
+void
+AMD64_PatchJumps(_UNIT_CompileContext *compile_context)
+{
+    assert(compile_context != NULL);
+    UNIT_Size count = _UNIT_Vector_SIZE(&compile_context->jump_table.pending_jumps);
 
     for (UNIT_Size index = 0; index < count; ++index) {
-        _UNIT_PendingJump *jump = _UNIT_Vector_GET(&context->jump_table.pending_jumps,
+        _UNIT_PendingJump *jump = _UNIT_Vector_GET(&compile_context->jump_table.pending_jumps,
                                                    index);
-        UNIT_Size label_offset = _UNIT_SizeMap_GET(&context->jump_table.label_offsets,
-                                                    jump->label_index);
+        UNIT_Size label_offset = _UNIT_SizeMap_GET(&compile_context->jump_table.label_offsets,
+                                                   jump->label_index);
 
         UNIT_Size instruction_end = jump->patch_offset + 4;
         int32_t displacement = (int32_t)(label_offset - instruction_end);
-        _UNIT_CodeBuffer_Patch32(&context->buffer, jump->patch_offset,
+        _UNIT_CodeBuffer_Patch32(&compile_context->buffer, jump->patch_offset,
                                  displacement);
     }
 }

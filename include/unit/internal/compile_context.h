@@ -137,6 +137,9 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
 void
 _UNIT_CompileContext_Clear(_UNIT_CompileContext *compile_context);
 
+_UNIT_Symbol *
+_UNIT_Symbol_New(UNIT_Context *context, const char *name);
+
 #ifdef __cplusplus
 }
 #endif
