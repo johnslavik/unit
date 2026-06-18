@@ -6,6 +6,10 @@
 
 #include <unit/internal/structure.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     UNIT_Context *context;
     uint8_t *data;
@@ -54,5 +58,9 @@ _UNIT_CodeBuffer_Reserve(_UNIT_CodeBuffer *buffer, UNIT_Size count);
 void
 _UNIT_CodeBuffer_PatchBytes(_UNIT_CodeBuffer *buffer, UNIT_Size offset,
                             const uint8_t *bytes, UNIT_Size count);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

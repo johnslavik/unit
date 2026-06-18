@@ -3,6 +3,10 @@
 
 #include <unit/base.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // These have to be defined in context.h instead of errors.h to avoid circular
 // dependency issues.
 typedef enum {
@@ -56,5 +60,9 @@ void
 UNIT_Context_Free(UNIT_Context *context);
 
 typedef void (*UNIT_Destructor)(UNIT_Context *ctx, void *ptr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -10,6 +10,10 @@
 #include <unit/internal/size_set.h>
 #include <unit/internal/vector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     _UNIT_TYPE_CONSTANT,
     _UNIT_TYPE_LOCATION,
@@ -104,5 +108,9 @@ _UNIT_Translation_Clear(_UNIT_Translation *translation);
 
 void
 _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -9,6 +9,10 @@
 
 #include <unit/internal/structure.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     void *key;
     void *value;
@@ -73,5 +77,9 @@ _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value);
         {
 
 #define _UNIT_Map_END_ITER() }}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

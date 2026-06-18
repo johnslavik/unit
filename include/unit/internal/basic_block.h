@@ -7,6 +7,10 @@
 #include <unit/internal/size_set.h>
 #include <unit/internal/vector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static const UNIT_Size _UNIT_BasicBlock_NO_LABEL = -1;
 
 typedef struct {
@@ -41,5 +45,9 @@ _UNIT_BasicBlock_Free(UNIT_Context *context, void *ptr);
 /* Call this in a loop until *changed is zero. */
 UNIT_Status
 _UNIT_BasicBlock_PopulateLivenessStep(_UNIT_BasicBlock *block, int8_t *changed);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

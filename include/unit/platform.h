@@ -27,7 +27,8 @@ static inline UNIT_ABI
 UNIT_Platform_GET_ABI(UNIT_Platform platform)
 {
     assert(platform >= 0);
-    UNIT_ABI abi = platform & _UNIT_ABI_MASK;
+    // Casting is necessary for C++ compatibility
+    UNIT_ABI abi = (UNIT_ABI)(platform & _UNIT_ABI_MASK);
     assert(abi == UNIT_ABI_SYSTEMV
            || abi == UNIT_ABI_WIN64
            || abi == UNIT_ABI_APPLE);
@@ -38,7 +39,7 @@ static inline UNIT_Architecture
 UNIT_Platform_GET_ARCH(UNIT_Platform platform)
 {
     assert(platform >= 0);
-    UNIT_Architecture arch = platform & _UNIT_ARCH_MASK;
+    UNIT_Architecture arch = (UNIT_Architecture)(platform & _UNIT_ARCH_MASK);
     assert(arch == UNIT_ARCH_AMD64
            || arch == UNIT_ARCH_AARCH64);
     return arch;

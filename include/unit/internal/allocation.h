@@ -4,6 +4,10 @@
 #include <unit/base.h>
 #include <unit/context.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Enable this for debugging with valgrind
 #if 0
 #include <stdlib.h>
@@ -38,6 +42,10 @@ _UNIT_StrDup(UNIT_Context *context, const char *src);
 
 void
 _UNIT_ClearFreelists(UNIT_Context *context);
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

@@ -6,6 +6,10 @@
 
 #include <unit/internal/structure.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     UNIT_Size value;
     int8_t is_populated;
@@ -49,5 +53,9 @@ _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value);
         {
 
 #define _UNIT_SizeSet_END_ITER() }}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

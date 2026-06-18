@@ -5,6 +5,10 @@
 
 #include <unit/context.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 UNIT_ErrorCode
 UNIT_GetErrorCode(const UNIT_Context *context);
 
@@ -26,5 +30,9 @@ _UNIT_SetErrorFormat(UNIT_Context *context, UNIT_ErrorCode code,
 
 void
 _UNIT_SetOSError(UNIT_Context *context, const char *what);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

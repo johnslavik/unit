@@ -3,14 +3,19 @@
 
 #include <unit/internal/allocation.h>
 
-#define _UNIT_Structure_NEW_IMPL(type, ...)             \
-    type *ptr = _UNIT_Alloc(context, sizeof(type));     \
-    if (ptr == NULL) {                                  \
-        return NULL;                                    \
-    }                                                   \
-    if (UNIT_FAILED(type## _Init(ptr, __VA_ARGS__))) {  \
-        return NULL;                                    \
-    }                                                   \
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define _UNIT_Structure_NEW_IMPL(type, ...)                     \
+    /* This cast has to be here for C++ compatibility */        \
+    type *ptr = (type *)_UNIT_Alloc(context, sizeof(type));     \
+    if (ptr == NULL) {                                          \
+        return NULL;                                            \
+    }                                                           \
+    if (UNIT_FAILED(type## _Init(ptr, __VA_ARGS__))) {          \
+        return NULL;                                            \
+    }                                                           \
     return ptr;
 
 #define _UNIT_Structure_DEFINE_PUBLIC_FREE(type)    \
@@ -33,5 +38,9 @@
 #define _UNIT_Structure_CLEAR_AND_FREE(type)    \
     void type## _Clear(type *ptr);              \
     _UNIT_Structure_DEFINE_FREE(type)           \
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -9,6 +9,10 @@
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     UNIT_FORMAT_ELF,
     UNIT_FORMAT_MACHO,
@@ -33,5 +37,9 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
 
 void
 UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

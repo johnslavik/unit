@@ -7,9 +7,17 @@
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                     _UNIT_CompileContext *context,
                     UNIT_ABI abi);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

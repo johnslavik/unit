@@ -7,6 +7,10 @@
 #include <unit/internal/map.h>
 #include <unit/internal/vector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     // Constants
     UNIT_OP_LOAD_STRING,
@@ -152,5 +156,9 @@ UNIT_Status
 UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,
                                 UNIT_Procedure *target,
                                 uint8_t nargs);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

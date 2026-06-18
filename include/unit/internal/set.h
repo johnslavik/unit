@@ -4,6 +4,10 @@
 #include <unit/base.h>
 #include <unit/internal/allocation.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     const void *value;
     int8_t is_populated;
@@ -31,5 +35,9 @@ _UNIT_Set_Contains(_UNIT_Set *set, const void *value);
 
 void
 _UNIT_Set_Remove(_UNIT_Set *set, const void *value);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

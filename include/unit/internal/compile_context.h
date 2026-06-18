@@ -9,6 +9,10 @@
 #include <unit/internal/translation.h>
 #include <unit/internal/vector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     RELOCATION_CALL,
     RELOCATION_DATA,
@@ -132,5 +136,9 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
 
 void
 _UNIT_CompileContext_Clear(_UNIT_CompileContext *compile_context);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

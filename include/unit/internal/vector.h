@@ -6,6 +6,10 @@
 
 #include <unit/internal/structure.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     UNIT_Context *context;
     void **items;
@@ -87,5 +91,9 @@ _UNIT_Vector_APPEND(_UNIT_Vector *vector, void *item)
 
 void
 _UNIT_Vector_Reverse(_UNIT_Vector *vector);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

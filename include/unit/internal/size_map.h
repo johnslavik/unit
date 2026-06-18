@@ -6,6 +6,10 @@
 
 #include <unit/internal/structure.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     UNIT_Size key;
     UNIT_Size value;
@@ -60,5 +64,9 @@ _UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map, UNIT_Size key);
         {
 
 #define _UNIT_SizeMap_END_ITER() }}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
