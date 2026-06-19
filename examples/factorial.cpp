@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     unit::Procedure procedure(context, "main");
 
     unit::Procedure factorial(context, "factorial");
-    unit::JumpLabel base_case(factorial, "base_case");
+    auto base_case = factorial.create_jump_label("base_case");
     factorial.load_argument(0);
     // [n]
     factorial.load_integer(1);

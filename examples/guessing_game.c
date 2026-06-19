@@ -49,7 +49,7 @@ int main(void)
 
 #define NEW_NAME(name)                                                      \
     UNIT_Local name;                                                        \
-    if (UNIT_FAILED(UNIT_Procedure_AddLocal(&procedure, #name, &name))) {   \
+    if (UNIT_FAILED(UNIT_Procedure_CreateLocal(&procedure, #name, &name))) {   \
         goto error;                                                         \
     }
 

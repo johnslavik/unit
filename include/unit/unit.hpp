@@ -220,8 +220,6 @@ class Local {
 public:
     constexpr explicit Local(UNIT_Local l) : local(l) {}
 
-    explicit Local(Procedure& procedure, const std::string &name);
-
     [[nodiscard]] UNIT_Local
     raw() const
     {
@@ -245,8 +243,6 @@ class JumpLabel {
     UNIT_JumpLabel *label;
 public:
     explicit JumpLabel(UNIT_JumpLabel *l) : label(l) {}
-
-    explicit JumpLabel(Procedure &procedure, const std::string &name);
 
     [[nodiscard]] UNIT_JumpLabel *
     raw() const
@@ -303,6 +299,17 @@ public:
     raw()
     {
         return &procedure;
+    }
+
+    Local
+    create_local(const std::string &name)
+    {
+        UNIT_Local local;
+        if (UNIT_FAILED(UNIT_Procedure_CreateLocal(&procedure, name.c_str(), &local))) {
+            throw error(procedure.context);
+        }
+
+        return Local(local);
     }
 
     void
@@ -447,6 +454,17 @@ public:
         add_op(OpCode::COMPARE_LESS_EQUAL);
     }
 
+    JumpLabel
+    create_jump_label(const std::string &name)
+    {
+        UNIT_JumpLabel *label = UNIT_Procedure_CreateJumpLabel(&procedure, name.c_str());
+        if (label == NULL) {
+            throw error(procedure.context);
+        }
+
+        return JumpLabel(label);
+    }
+
     void
     use_label(const JumpLabel label)
     {
@@ -546,25 +564,6 @@ public:
     Procedure(const Procedure &) = delete;
     Procedure &operator=(const Procedure &) = delete;
 };
-
-// These need to be defined down here because we need access to the full procedure class
-inline
-JumpLabel::JumpLabel(Procedure &procedure, const std::string &name)
-{
-    auto label = UNIT_Procedure_CreateJumpLabel(procedure.raw(), name.c_str());
-    if (label == NULL) {
-        throw error(procedure.raw()->context);
-    }
-    this->label = label;
-}
-
-inline
-Local::Local(Procedure& procedure, const std::string &name)
-{
-    if (UNIT_FAILED(UNIT_Procedure_AddLocal(procedure.raw(), name.c_str(), &local))) {
-        throw error(procedure.raw()->context);
-    }
-}
 
 
 }

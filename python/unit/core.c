@@ -346,7 +346,7 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
 }
 
 static PyObject *
-ProcedureObject_create_label(PyObject *op, PyObject *name_obj)
+ProcedureObject_create_jump_label(PyObject *op, PyObject *name_obj)
 {
     if (!PyUnicode_Check(name_obj)) {
         PyErr_Format(PyExc_TypeError, "expected a string, got %R", name_obj);
@@ -493,7 +493,7 @@ ProcedureObject_dealloc(PyObject *op)
 }
 
 static PyMethodDef ProcedureObject_methods[] = {
-    {"create_label", ProcedureObject_create_label, METH_O, NULL},
+    {"create_jump_label", ProcedureObject_create_jump_label, METH_O, NULL},
     {"add_jump", ProcedureObject_add_jump, METH_VARARGS, NULL},
     {"use_label", ProcedureObject_use_label, METH_O, NULL},
     {"add_call_name", ProcedureObject_add_call_name, METH_VARARGS, NULL},

@@ -263,7 +263,7 @@ UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str)
 }
 
 UNIT_Status
-UNIT_Procedure_AddLocal(UNIT_Procedure *procedure, const char *name,
+UNIT_Procedure_CreateLocal(UNIT_Procedure *procedure, const char *name,
                         UNIT_Local *local_ptr)
 {
     UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_local_variables);
