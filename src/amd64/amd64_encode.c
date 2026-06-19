@@ -51,6 +51,8 @@ enum {
     OPCODE_SUB_RM64_R64 = 0x29,
     OPCODE_IMUL_R64_RM64_0 = 0x0F,
     OPCODE_IMUL_R64_RM64_1 = 0xAF,
+    OPCODE_IMUL_R64_RM64_IMM32 = 0x69,
+    OPCODE_IMUL_R64_RM64_IMM8 = 0x6B,
     OPCODE_IDIV_RM64 = 0xF7,
 
     // Misc
@@ -555,14 +557,29 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         case AMD64_MUL: {
             AMD64_Operand dst = instr->operands[0];
             AMD64_Operand src = instr->operands[1];
-
-            // imul reg, reg
             assert(dst.kind == OPERAND_REGISTER);
-            assert(src.kind == OPERAND_REGISTER);
-            EMIT_REX(dst.reg, src.reg);
-            EMIT8(OPCODE_IMUL_R64_RM64_0);
-            EMIT8(OPCODE_IMUL_R64_RM64_1);
-            EMIT8(modrm(MOD_REGISTER, reg_bits(dst.reg), reg_bits(src.reg)));
+
+            if (src.kind == OPERAND_IMMEDIATE) {
+                // imul reg, imm
+                int64_t value = src.immediate;
+                EMIT_REX(dst.reg, dst.reg);
+                EMIT8(value >= -128 && value <= 127
+                    ? OPCODE_IMUL_R64_RM64_IMM8
+                    : OPCODE_IMUL_R64_RM64_IMM32);
+                EMIT8(modrm(MOD_REGISTER, reg_bits(dst.reg), reg_bits(dst.reg)));
+                if (value >= -128 && value <= 127) {
+                    EMIT8((uint8_t)(value & 0xFF));
+                } else {
+                    EMIT32((uint32_t)value);
+                }
+            } else {
+                // imul reg, reg
+                assert(src.kind == OPERAND_REGISTER);
+                EMIT_REX(dst.reg, src.reg);
+                EMIT8(OPCODE_IMUL_R64_RM64_0);
+                EMIT8(OPCODE_IMUL_R64_RM64_1);
+                EMIT8(modrm(MOD_REGISTER, reg_bits(dst.reg), reg_bits(src.reg)));
+            }
             break;
         }
 
