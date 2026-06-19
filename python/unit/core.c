@@ -5,17 +5,36 @@ typedef struct {
     PyObject *ErrorType;
     PyObject *ContextType;
     PyObject *CompiledProcedureType;
+    PyObject *LocalType;
+    PyObject *JumpLabelType;
     PyObject *ProcedureType;
 } _unit_state;
 
+static _unit_state *
+get_state_from_type(PyTypeObject *cls)
+{
+    assert(cls != NULL);
+    assert(PyType_Check(cls));
+    PyObject *module = PyType_GetModule(cls);
+    assert(module != NULL);
+    assert(PyModule_Check(module));
+
+    _unit_state *state = PyModule_GetState(module);
+    assert(state != NULL);
+    return state;
+}
+
+static _unit_state *
+get_state_from_object(PyObject *op)
+{
+    return get_state_from_type(Py_TYPE(op));
+}
+
 static void
-set_py_error_from_context(PyObject *module, UNIT_Context *context)
+set_py_error_from_context(_unit_state *state, UNIT_Context *context)
 {
     assert(!PyErr_Occurred());
-    assert(module != NULL);
     assert(context != NULL);
-    assert(PyModule_Check(module));
-    _unit_state *state = PyModule_GetState(module);
     assert(state != NULL);
     assert(state->ErrorType != NULL);
 
@@ -90,8 +109,8 @@ typedef struct {
 #define CompiledProcedureObject_CAST(op) ((CompiledProcedureObject *)op)
 
 static PyObject *
-CompiledProcedure_internal_create(PyTypeObject *cls,
-                                  UNIT_CompiledProcedure *compiled_procedure)
+CompiledProcedureObject_internal_create(PyTypeObject *cls,
+                                        UNIT_CompiledProcedure *compiled_procedure)
 {
     assert(cls != NULL);
     assert(compiled_procedure != NULL);
@@ -101,13 +120,37 @@ CompiledProcedure_internal_create(PyTypeObject *cls,
         return NULL;
     }
 
-    CompiledProcedureObject *compiled = CompiledProcedureObject_CAST(op);
-    compiled->compiled_procedure = compiled_procedure;
+    CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
+    self->compiled_procedure = compiled_procedure;
     return op;
 }
 
+static PyObject *
+CompiledProcedureObject_write_object_file(PyObject *op, PyObject *args)
+{
+    assert(op != NULL);
+    assert(args != NULL);
+
+    const char *path;
+    UNIT_ExecutableFormat format;
+
+    if (!PyArg_ParseTuple(args, "si", &path, &format)) {
+        return NULL;
+    }
+
+    CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
+
+    if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(self->compiled_procedure,
+                                                           path, format))) {
+        set_py_error_from_context(get_state_from_object(op), self->compiled_procedure->context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
 static int
-CompiledProcedure_traverse(PyObject *op, visitproc visit, void *arg)
+CompiledProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
 {
     assert(op != NULL);
     Py_VISIT(Py_TYPE(op));
@@ -115,7 +158,7 @@ CompiledProcedure_traverse(PyObject *op, visitproc visit, void *arg)
 }
 
 static void
-CompiledProcedure_dealloc(PyObject *op)
+CompiledProcedureObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     CompiledProcedureObject *compiled = CompiledProcedureObject_CAST(op);
@@ -125,9 +168,15 @@ CompiledProcedure_dealloc(PyObject *op)
     Py_DECREF(cls);
 }
 
+static PyMethodDef CompiledProcedureObject_methods[] = {
+    {"write_object_file", CompiledProcedureObject_write_object_file, METH_VARARGS, NULL},
+    {NULL},
+};
+
 static PyType_Slot CompiledProcedureType_slots[] = {
-    {Py_tp_traverse, CompiledProcedure_traverse},
-    {Py_tp_dealloc, CompiledProcedure_dealloc},
+    {Py_tp_traverse, CompiledProcedureObject_traverse},
+    {Py_tp_dealloc, CompiledProcedureObject_dealloc},
+    {Py_tp_methods, CompiledProcedureObject_methods},
     {0, 0},  /* sentinel */
 };
 
@@ -140,6 +189,108 @@ static PyType_Spec CompiledProcedureType_spec = {
 
 typedef struct {
     PyObject_HEAD
+    UNIT_Local local;
+} LocalObject;
+
+#define LocalObject_CAST(op) ((LocalObject *)op)
+
+static PyObject *
+LocalObject_internal_create(PyTypeObject *cls, UNIT_Local local)
+{
+    assert(cls != NULL);
+    PyObject *op = cls->tp_alloc(cls, 0);
+    if (op == NULL) {
+        return NULL;
+    }
+
+    LocalObject *self = LocalObject_CAST(op);
+    self->local = local;
+    return op;
+}
+
+static int
+LocalObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    assert(op != NULL);
+    Py_VISIT(Py_TYPE(op));
+    return 0;
+}
+
+static void
+LocalObject_dealloc(PyObject *op)
+{
+    assert(op != NULL);
+    PyTypeObject *cls = Py_TYPE(op);
+    cls->tp_free(op);
+    Py_DECREF(cls);
+}
+
+static PyType_Slot LocalType_slots[] = {
+    {Py_tp_traverse, LocalObject_traverse},
+    {Py_tp_dealloc, LocalObject_dealloc},
+    {0, 0},  /* sentinel */
+};
+
+static PyType_Spec LocalType_spec = {
+    .name = "Local",
+    .basicsize = sizeof(LocalObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
+    .slots = LocalType_slots,
+};
+
+typedef struct {
+    PyObject_HEAD
+    UNIT_JumpLabel *label;
+} JumpLabelObject;
+
+#define JumpLabelObject_CAST(op) ((JumpLabelObject *)op)
+
+static PyObject *
+JumpLabelObject_internal_create(PyTypeObject *cls, UNIT_JumpLabel *label)
+{
+    assert(cls != NULL);
+    assert(label != NULL);
+    PyObject *op = cls->tp_alloc(cls, 0);
+    if (op == NULL) {
+        return NULL;
+    }
+
+    JumpLabelObject *self = JumpLabelObject_CAST(op);
+    self->label = label;
+    return op;
+}
+
+static int
+JumpLabelObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    assert(op != NULL);
+    Py_VISIT(Py_TYPE(op));
+    return 0;
+}
+
+static void
+JumpLabelObject_dealloc(PyObject *op)
+{
+    assert(op != NULL);
+    PyTypeObject *cls = Py_TYPE(op);
+    cls->tp_free(op);
+    Py_DECREF(cls);
+}
+
+static PyType_Slot JumpLabelType_slots[] = {
+    {Py_tp_traverse, JumpLabelObject_traverse},
+    {Py_tp_dealloc, JumpLabelObject_dealloc},
+    {0, 0},  /* sentinel */
+};
+
+static PyType_Spec JumpLabelType_spec = {
+    .name = "JumpLabel",
+    .basicsize = sizeof(JumpLabelObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
+    .slots = JumpLabelType_slots,
+};
+typedef struct {
+    PyObject_HEAD
     PyObject *context;
     UNIT_Procedure procedure;
 } ProcedureObject;
@@ -149,14 +300,7 @@ typedef struct {
 static PyObject *
 ProcedureObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 {
-    assert(cls != NULL);
-    PyObject *module = PyType_GetModule(cls);
-    if (module == NULL) {
-        return NULL;
-    }
-
-    _unit_state *state = PyModule_GetState(module);
-    assert(state != NULL);
+    _unit_state *state = get_state_from_type(cls);
 
     PyObject *context_op;
     const char *name;
@@ -173,7 +317,7 @@ ProcedureObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     ProcedureObject *procedure = ProcedureObject_CAST(op);
     if (UNIT_FAILED(UNIT_Procedure_Init(&procedure->procedure, &context->context, name))) {
         Py_DECREF(op);
-        set_py_error_from_context(module, &context->context);
+        set_py_error_from_context(state, &context->context);
         return NULL;
     }
 
@@ -194,11 +338,94 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
     }
 
     if (UNIT_FAILED(UNIT_Procedure_AddOperation(&self->procedure, instruction, oparg))) {
-        PyObject *module = PyType_GetModule(Py_TYPE(op));
-        if (module == NULL) {
-            return NULL;
-        }
-        set_py_error_from_context(module, self->procedure.context);
+        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+ProcedureObject_create_label(PyObject *op, PyObject *name_obj)
+{
+    if (!PyUnicode_Check(name_obj)) {
+        PyErr_Format(PyExc_TypeError, "expected a string, got %R", name_obj);
+        return NULL;
+    }
+
+    const char *name = PyUnicode_AsUTF8(name_obj);
+    if (name == NULL) {
+        return NULL;
+    }
+
+    _unit_state *state = get_state_from_object(op);
+    ProcedureObject *self = ProcedureObject_CAST(op);
+    UNIT_JumpLabel *label = UNIT_Procedure_CreateJumpLabel(&self->procedure, name);
+    if (label == NULL) {
+        set_py_error_from_context(state, self->procedure.context);
+        return NULL;
+    }
+
+    return JumpLabelObject_internal_create((PyTypeObject *)state->JumpLabelType, label);
+}
+
+static PyObject *
+ProcedureObject_add_jump(PyObject *op, PyObject *args)
+{
+    UNIT_Instruction instruction;
+    PyObject *jump_label_obj;
+    _unit_state *state = get_state_from_object(op);
+
+    if (!PyArg_ParseTuple(args, "iO!", &instruction, state->JumpLabelType, &jump_label_obj)) {
+        return NULL;
+    }
+
+    ProcedureObject *self = ProcedureObject_CAST(op);
+    UNIT_JumpLabel *label = JumpLabelObject_CAST(jump_label_obj)->label;
+    assert(label != NULL);
+
+    if (UNIT_FAILED(UNIT_Procedure_AddJump(&self->procedure, instruction, label))) {
+        set_py_error_from_context(state, self->procedure.context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+ProcedureObject_use_label(PyObject *op, PyObject *jump_label)
+{
+    _unit_state *state = get_state_from_object(op);
+    if (!PyObject_TypeCheck(jump_label, (PyTypeObject *)state->JumpLabelType)) {
+        PyErr_Format(PyExc_TypeError, "expected a jump label, got %R", jump_label);
+        return NULL;
+    }
+
+    ProcedureObject *self = ProcedureObject_CAST(op);
+    UNIT_JumpLabel *label = JumpLabelObject_CAST(jump_label)->label;
+    assert(label != NULL);
+
+    if (UNIT_FAILED(UNIT_Procedure_UseLabel(&self->procedure, label))) {
+        set_py_error_from_context(state, self->procedure.context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+ProcedureObject_add_call_name(PyObject *op, PyObject *args)
+{
+    const char *name;
+    int nargs;
+
+    if (!PyArg_ParseTuple(args, "si", &name, &nargs)) {
+        return NULL;
+    }
+
+    ProcedureObject *self = ProcedureObject_CAST(op);
+    if (UNIT_FAILED(UNIT_Procedure_AddCallName(&self->procedure, name, nargs))) {
+        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
         return NULL;
     }
 
@@ -221,24 +448,17 @@ ProcedureObject_compile(PyObject *op, PyObject *platform_obj)
         return NULL;
     }
 
-    PyObject *module = PyType_GetModule(Py_TYPE(op));
-    if (module == NULL) {
-        return NULL;
-    }
-
+    _unit_state *state = get_state_from_object(op);
     ProcedureObject *self = ProcedureObject_CAST(op);
     UNIT_CompiledProcedure *compiled_procedure = UNIT_Compile(&self->procedure,
                                                               platform);
     if (compiled_procedure == NULL) {
-        set_py_error_from_context(module, self->procedure.context);
+        set_py_error_from_context(state, self->procedure.context);
         return NULL;
     }
 
-    _unit_state *state = PyModule_GetState(module);
-    assert(state != NULL);
-
-    return CompiledProcedure_internal_create((PyTypeObject *)state->CompiledProcedureType,
-                                             compiled_procedure);
+    return CompiledProcedureObject_internal_create((PyTypeObject *)state->CompiledProcedureType,
+                                                    compiled_procedure);
 }
 
 static int
@@ -273,6 +493,10 @@ ProcedureObject_dealloc(PyObject *op)
 }
 
 static PyMethodDef ProcedureObject_methods[] = {
+    {"create_label", ProcedureObject_create_label, METH_O, NULL},
+    {"add_jump", ProcedureObject_add_jump, METH_VARARGS, NULL},
+    {"use_label", ProcedureObject_use_label, METH_O, NULL},
+    {"add_call_name", ProcedureObject_add_call_name, METH_VARARGS, NULL},
     {"add_operation", ProcedureObject_add_operation, METH_VARARGS, NULL},
     {"compile", ProcedureObject_compile, METH_O, NULL},
     {NULL},
@@ -319,6 +543,67 @@ _unit_modexec(PyObject *module)
     ADD_TYPE(Context);
     ADD_TYPE(CompiledProcedure);
     ADD_TYPE(Procedure);
+    ADD_TYPE(JumpLabel);
+    ADD_TYPE(Local);
+
+#undef ADD_TYPE
+
+#define EXPORT_CONST(name)                      \
+    if (PyModule_AddIntMacro(module, name)) {   \
+        return -1;                              \
+    }
+
+    EXPORT_CONST(UNIT_OP_LOAD_STRING);
+    EXPORT_CONST(UNIT_OP_LOAD_INTEGER);
+
+    EXPORT_CONST(UNIT_OP_LOAD_LOCAL);
+    EXPORT_CONST(UNIT_OP_STORE_LOCAL);
+
+    EXPORT_CONST(UNIT_OP_ADD);
+    EXPORT_CONST(UNIT_OP_SUBTRACT);
+    EXPORT_CONST(UNIT_OP_MULTIPLY);
+    EXPORT_CONST(UNIT_OP_DIVIDE);
+    EXPORT_CONST(UNIT_OP_MODULO);
+
+    EXPORT_CONST(UNIT_OP_JUMP_TO);
+    EXPORT_CONST(UNIT_OP_JUMP_IF_FALSE);
+    EXPORT_CONST(UNIT_OP_JUMP_IF_TRUE);
+
+    EXPORT_CONST(UNIT_OP_EXIT);
+    EXPORT_CONST(UNIT_OP_RETURN_VALUE);
+    EXPORT_CONST(UNIT_OP_LOAD_ARGUMENT);
+
+    EXPORT_CONST(UNIT_OP_PREPARE_CALL);
+    EXPORT_CONST(UNIT_OP_CALL_NAME);
+    EXPORT_CONST(UNIT_OP_CALL_PROCEDURE);
+
+    EXPORT_CONST(UNIT_OP_COMPARE_EQUAL);
+    EXPORT_CONST(UNIT_OP_COMPARE_NOT_EQUAL);
+    EXPORT_CONST(UNIT_OP_COMPARE_GREATER);
+    EXPORT_CONST(UNIT_OP_COMPARE_GREATER_EQUAL);
+    EXPORT_CONST(UNIT_OP_COMPARE_LESS);
+    EXPORT_CONST(UNIT_OP_COMPARE_LESS_EQUAL);
+
+    EXPORT_CONST(UNIT_OP_COPY);
+    EXPORT_CONST(UNIT_OP_SWAP);
+    EXPORT_CONST(UNIT_OP_POP);
+
+    EXPORT_CONST(UNIT_OP_ADDRESS_OF);
+    EXPORT_CONST(UNIT_OP_READ_BYTES);
+    EXPORT_CONST(UNIT_OP_WRITE_BYTES);
+
+    EXPORT_CONST(UNIT_OP_CONVERT);
+
+    EXPORT_CONST(UNIT_TYPE_INT8);
+    EXPORT_CONST(UNIT_TYPE_INT16);
+    EXPORT_CONST(UNIT_TYPE_INT32);
+    EXPORT_CONST(UNIT_TYPE_INT64);
+    EXPORT_CONST(UNIT_TYPE_UINT8);
+    EXPORT_CONST(UNIT_TYPE_UINT16);
+    EXPORT_CONST(UNIT_TYPE_UINT32);
+    EXPORT_CONST(UNIT_TYPE_UINT64);
+
+#undef EXPORT_CONST
 
     return 0;
 }
@@ -347,6 +632,8 @@ _unit_traverse(PyObject *module, visitproc visit, void *arg)
     Py_VISIT(state->ErrorType);
     Py_VISIT(state->ProcedureType);
     Py_VISIT(state->CompiledProcedureType);
+    Py_VISIT(state->JumpLabelType);
+    Py_VISIT(state->LocalType);
     return 0;
 }
 
@@ -360,6 +647,8 @@ _unit_clear(PyObject *module)
     Py_CLEAR(state->ErrorType);
     Py_CLEAR(state->ProcedureType);
     Py_CLEAR(state->CompiledProcedureType);
+    Py_CLEAR(state->JumpLabelType);
+    Py_CLEAR(state->LocalType);
     return 0;
 }
 

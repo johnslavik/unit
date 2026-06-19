@@ -34,10 +34,3 @@ class Context:
         """
 
         return cls.current() or cls()
-
-
-class Procedure:
-    def __init__(self, name: str, *, context: Context | None = None) -> None:
-        self.context = context or Context.current_or_new()
-        self.name = name
-        self._procedure = _core.Procedure(self.context._context, name)
