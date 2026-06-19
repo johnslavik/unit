@@ -3,6 +3,14 @@
 #include <unit/errors.h>
 #include <unit/executable_buffer.h>
 
+struct _UNIT_ExecutableBuffer {
+    UNIT_Context *context;
+    void *code;
+    void *rodata;
+    UNIT_Size code_size;
+    UNIT_Size rodata_size;
+};
+
 #ifdef _WIN32
     #include <windows.h>
     #define JIT_ALLOC(size) VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)
@@ -24,9 +32,9 @@
     #define JIT_RESOLVE_SYMBOL(name) dlsym(RTLD_DEFAULT, name)
 #endif
 
-UNIT_Status
-UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled,
-                           UNIT_ExecutableBuffer *buffer)
+static UNIT_Status
+init_executable_buffer(const UNIT_CompiledProcedure *compiled,
+                       UNIT_ExecutableBuffer *buffer)
 {
     assert(compiled != NULL);
     assert(buffer != NULL);
@@ -100,12 +108,37 @@ UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled,
     return _UNIT_OK;
 }
 
+UNIT_ExecutableBuffer *
+UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled_procedure)
+{
+    assert(compiled_procedure != NULL);
+    UNIT_ExecutableBuffer *buffer = _UNIT_Alloc(compiled_procedure->context,
+                                                sizeof(UNIT_ExecutableBuffer));
+    buffer->context = compiled_procedure->context;
+    if (UNIT_FAILED(init_executable_buffer(compiled_procedure, buffer))) {
+        _UNIT_Dealloc(compiled_procedure->context, buffer);
+        return NULL;
+    }
+
+    return buffer;
+}
+
+void *
+UNIT_ExecutableBuffer_GetPointer(const UNIT_ExecutableBuffer *buffer)
+{
+    assert(buffer != NULL);
+    assert(buffer->code != NULL);
+    return buffer->code;
+}
+
 void
-UNIT_ExecutableBuffer_Clear(UNIT_ExecutableBuffer *buffer)
+UNIT_ExecutableBuffer_Free(UNIT_ExecutableBuffer *buffer)
 {
     assert(buffer != NULL);
     if (buffer->code != NULL) {
         UNIT_Size total = buffer->code_size + buffer->rodata_size;
         JIT_FREE(buffer->code, total);
     }
+
+    _UNIT_Dealloc(buffer->context, buffer);
 }

@@ -7,6 +7,7 @@ typedef struct {
     PyObject *CompiledProcedureType;
     PyObject *LocalType;
     PyObject *JumpLabelType;
+    PyObject *ExecutableBufferType;
     PyObject *ProcedureType;
 } _unit_state;
 
@@ -103,6 +104,77 @@ static PyType_Spec ContextType_spec = {
 
 typedef struct {
     PyObject_HEAD
+    UNIT_ExecutableBuffer *buffer;
+} ExecutableBufferObject;
+
+#define ExecutableBufferObject_CAST(op) ((ExecutableBufferObject *)op)
+
+static PyObject *
+ExecutableBufferObject_internal_create(PyTypeObject *cls, UNIT_ExecutableBuffer *buffer)
+{
+    assert(cls != NULL);
+    assert(buffer != NULL);
+    PyObject *op = cls->tp_alloc(cls, 0);
+    if (op == NULL) {
+        UNIT_ExecutableBuffer_Free(buffer);
+        return NULL;
+    }
+
+    ExecutableBufferObject *self = ExecutableBufferObject_CAST(op);
+    self->buffer = buffer;
+    return op;
+}
+
+static int
+ExecutableBufferObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    assert(op != NULL);
+    Py_VISIT(Py_TYPE(op));
+    return 0;
+}
+
+static void
+ExecutableBufferObject_dealloc(PyObject *op)
+{
+    assert(op != NULL);
+    ExecutableBufferObject *self = ExecutableBufferObject_CAST(op);
+    UNIT_ExecutableBuffer_Free(self->buffer);
+
+    PyTypeObject *cls = Py_TYPE(op);
+    cls->tp_free(op);
+    Py_DECREF(cls);
+}
+
+static PyObject *
+ExecutableBufferObject_get_address(PyObject *op, void *closure)
+{
+    assert(op != NULL);
+    ExecutableBufferObject *self = ExecutableBufferObject_CAST(op);
+    assert(self->buffer != NULL);
+    return PyLong_FromVoidPtr(UNIT_ExecutableBuffer_GetPointer(self->buffer));
+}
+
+static PyGetSetDef ExecutableBufferObject_getset[] = {
+    {"address", ExecutableBufferObject_get_address, NULL, NULL},
+    {NULL},
+};
+
+static PyType_Slot ExecutableBufferType_slots[] = {
+    {Py_tp_traverse, ExecutableBufferObject_traverse},
+    {Py_tp_dealloc, ExecutableBufferObject_dealloc},
+    {Py_tp_getset, ExecutableBufferObject_getset},
+    {0, 0},  /* sentinel */
+};
+
+static PyType_Spec ExecutableBufferType_spec = {
+    .name = "ExecutableBuffer",
+    .basicsize = sizeof(ExecutableBufferObject),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
+    .slots = ExecutableBufferType_slots,
+};
+
+typedef struct {
+    PyObject_HEAD
     UNIT_CompiledProcedure *compiled_procedure;
 } CompiledProcedureObject;
 
@@ -149,6 +221,23 @@ CompiledProcedureObject_write_object_file(PyObject *op, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+CompiledProcedureObject_jit(PyObject *op, PyObject *unused)
+{
+    assert(op != NULL);
+    CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
+    _unit_state *state = get_state_from_object(op);
+
+    UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(self->compiled_procedure);
+    if (buffer == NULL) {
+        set_py_error_from_context(state, self->compiled_procedure->context);
+        return NULL;
+    }
+
+    return ExecutableBufferObject_internal_create((PyTypeObject *)state->ExecutableBufferType,
+                                                  buffer);
+}
+
 static int
 CompiledProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
 {
@@ -163,6 +252,7 @@ CompiledProcedureObject_dealloc(PyObject *op)
     assert(op != NULL);
     CompiledProcedureObject *compiled = CompiledProcedureObject_CAST(op);
     UNIT_CompiledProcedure_Free(compiled->compiled_procedure);
+
     PyTypeObject *cls = Py_TYPE(op);
     cls->tp_free(op);
     Py_DECREF(cls);
@@ -170,6 +260,7 @@ CompiledProcedureObject_dealloc(PyObject *op)
 
 static PyMethodDef CompiledProcedureObject_methods[] = {
     {"write_object_file", CompiledProcedureObject_write_object_file, METH_VARARGS, NULL},
+    {"jit", CompiledProcedureObject_jit, METH_NOARGS, NULL},
     {NULL},
 };
 
@@ -289,6 +380,7 @@ static PyType_Spec JumpLabelType_spec = {
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .slots = JumpLabelType_slots,
 };
+
 typedef struct {
     PyObject_HEAD
     PyObject *context;
@@ -545,6 +637,7 @@ _unit_modexec(PyObject *module)
     ADD_TYPE(Procedure);
     ADD_TYPE(JumpLabel);
     ADD_TYPE(Local);
+    ADD_TYPE(ExecutableBuffer);
 
 #undef ADD_TYPE
 

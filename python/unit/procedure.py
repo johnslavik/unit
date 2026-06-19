@@ -1,8 +1,50 @@
 from unit.context import Context
 from unit.opcode import OpCode
 from unit import _core
-from typing import Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, TypeVar, Generic
 from dataclasses import dataclass
+import ctypes
+
+ArgT = TypeVar("ArgT")
+ResT = TypeVar("ResT")
+
+class ExecutableBuffer(Generic[ArgT, ResT]):
+    def __init__(self, executable_buffer: _core.ExecutableBuffer) -> None:
+        if __debug__ and not isinstance(executable_buffer, _core.ExecutableBuffer):
+            raise TypeError(f"expected an internal executable buffer, got {executable_buffer!r}")
+
+        self._buffer = executable_buffer
+
+    @property
+    def address(self) -> int:
+        return self._buffer.address
+
+    def __call__(self, *args: ArgT) -> ResT:
+        ctypes_args = []
+        arg_types = []
+        for arg in args:
+            if isinstance(arg, int):
+                ctypes_args.append(ctypes.c_int64(arg))
+                arg_types.append(ctypes.c_int64)
+            elif isinstance(arg, float):
+                ctypes_args.append(ctypes.c_double(arg))
+                arg_types.append(ctypes.c_double)
+            elif isinstance(arg, bytes):
+                ctypes_args.append(ctypes.c_char_p(arg))
+                arg_types.append(ctypes.c_char_p)
+            elif isinstance(arg, str):
+                encoded = arg.encode("utf-8")
+                ctypes_args.append(ctypes.c_char_p(encoded))
+                arg_types.append(ctypes.c_char_p)
+            else:
+                raise TypeError(f"unsupported argument type: {type(arg)}. "
+                                "For finer control over arguments, construct your own "
+                                "function pointer via the 'address' attribute.")
+
+        func_type = ctypes.CFUNCTYPE(ctypes.c_int64, *arg_types)
+        func = func_type(self._buffer.address)
+        return func(*ctypes_args)
+
 
 class CompiledProcedure:
     def __init__(self, compiled_procedure: _core.CompiledProcedure) -> None:
@@ -21,6 +63,9 @@ class CompiledProcedure:
         else:
             raise ValueError(f"unknown format {format!r}, expected one of: elf, macho, pe")
         self._compiled.write_object_file(path, format_enum)
+
+    def jit(self) -> ExecutableBuffer[Any, Any]:
+        return ExecutableBuffer(self._compiled.jit())
 
 
 Architecture: TypeAlias = Literal["amd64", "aarch64"]

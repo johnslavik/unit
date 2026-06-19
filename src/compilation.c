@@ -117,8 +117,6 @@ compile_and_store_procedure(const UNIT_Procedure *procedure, UNIT_Platform platf
         return NULL;
     }
 
-    UNIT_CompiledProcedure_PrintTranslatedIR(compiled_procedure, stdout);
-
     if (UNIT_FAILED(_UNIT_Vector_Append(compiled, compiled_procedure))) {
         return NULL;
     }

@@ -8,19 +8,16 @@
 extern "C" {
 #endif
 
-typedef struct {
-    void *code;
-    void *rodata;
-    UNIT_Size code_size;
-    UNIT_Size rodata_size;
-} UNIT_ExecutableBuffer;
+typedef struct _UNIT_ExecutableBuffer UNIT_ExecutableBuffer;
 
-UNIT_Status
-UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled,
-                           UNIT_ExecutableBuffer *buffer);
+UNIT_ExecutableBuffer *
+UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled);
+
+void *
+UNIT_ExecutableBuffer_GetPointer(const UNIT_ExecutableBuffer *buffer);
 
 void
-UNIT_ExecutableBuffer_Clear(UNIT_ExecutableBuffer *buffer);
+UNIT_ExecutableBuffer_Free(UNIT_ExecutableBuffer *buffer);
 
 #ifdef __cplusplus
 }
