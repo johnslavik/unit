@@ -365,9 +365,14 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                 break;
             }
 
-            case UNIT_OP_ADDRESS_OF:
+            case UNIT_OP_ADDRESS_OF: {
                 PUSH(STACK_ADDRESS, op->argument);
                 break;
+            }
+
+            case UNIT_OP_CONVERT: {
+                break;
+            }
 
             default: {
                 _UNIT_Unreachable();

@@ -376,14 +376,15 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
             continue;
         }
 
-        fprintf(stream, "        %s", UNIT_Instruction_GetName(operation->instruction));
+        fprintf(stream, "    %ld    %s", index, UNIT_Instruction_GetName(operation->instruction));
         if (operation->argument != 0
             || operation->instruction == UNIT_OP_LOAD_INTEGER
             || operation->instruction == UNIT_OP_LOAD_ARGUMENT
             || operation->instruction == UNIT_OP_STORE_LOCAL
             || operation->instruction == UNIT_OP_LOAD_LOCAL
             || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
-            || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME) {
+            || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
+            || operation->instruction == UNIT_OP_ADDRESS_OF) {
             fprintf(stream, "  %ld", (long)operation->argument);
         }
 
@@ -392,21 +393,21 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 const char *name = _UNIT_Vector_GET(&procedure->_symbols,
                                                     operation->argument);
                 assert(name != NULL);
-                fprintf(stream, "  (%s)", name);
+                fprintf(stream, " (%s)", name);
                 break;
             }
             case UNIT_OP_CALL_PROCEDURE: {
                 UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures,
                                                                 operation->argument);
                 assert(subprocedure != NULL);
-                fprintf(stream, "  (%p: %s)", subprocedure, subprocedure->name);
+                fprintf(stream, " (%p: %s)", subprocedure, subprocedure->name);
                 break;
             }
             case UNIT_OP_LOAD_STRING: {
                 const char *text = _UNIT_Vector_GET(&procedure->_global_strings,
                                                     operation->argument);
                 assert(text != NULL);
-                fprintf(stream, "  (%s)", text);
+                fprintf(stream, " (%s)", text);
                 break;
             }
             case _UNIT_OP_STORE_LOCAL_NAME:
@@ -414,7 +415,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 const char *name = _UNIT_Vector_GET(&procedure->_local_variables,
                                                     operation->argument);
                 assert(name != NULL);
-                fprintf(stream, "  (%s)", name);
+                fprintf(stream, " (%s)", name);
                 break;
             }
             case UNIT_OP_JUMP_TO:
@@ -423,7 +424,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels,
                                                          operation->argument);
                 assert(label != NULL);
-                fprintf(stream, "  (%s [%d])", label->name, label->id);
+                fprintf(stream, " (%s [%d])", label->name, label->id);
                 break;
 
             }
