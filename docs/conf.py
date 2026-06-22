@@ -14,7 +14,7 @@ release = '0.1.0'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx_copybutton', 'sphinx_design', 'sphinx_iconify']
+extensions = ['sphinx_copybutton', 'sphinx_design', 'sphinx_iconify', 'sphinx_tabs.tabs']
 
 templates_path = []
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

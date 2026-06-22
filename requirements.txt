@@ -4,3 +4,4 @@ shibuya>=2026.5.19
 sphinx-copybutton~=0.5
 sphinx-design~=0.7
 sphinx-iconify~=0.3
+sphinx-tabs~=3.5
