@@ -1,6 +1,8 @@
 #ifndef _UNIT_VECTOR_H
 #define _UNIT_VECTOR_H
 
+#include <stdbool.h>
+
 #include <unit/base.h>
 #include <unit/context.h>
 
@@ -43,12 +45,22 @@ _UNIT_Vector_SIZE(const _UNIT_Vector *vector)
     return vector->length;
 }
 
+static inline bool
+_UNIT_Vector_INDEX_IS_VALID(const _UNIT_Vector *vector, UNIT_Size index)
+{
+    assert(vector != NULL);
+    if (index < 0) {
+        return false;
+    }
+
+    return index < _UNIT_Vector_SIZE(vector);
+}
+
 static inline void *
 _UNIT_Vector_GET(const _UNIT_Vector *vector, UNIT_Size index)
 {
     assert(vector != NULL);
-    assert(index >= 0);
-    assert(index < _UNIT_Vector_SIZE(vector));
+    assert(_UNIT_Vector_INDEX_IS_VALID(vector, index));
     assert(vector->items[index] != NULL);
     return vector->items[index];
 }
@@ -57,8 +69,7 @@ static inline void
 _UNIT_Vector_SET(_UNIT_Vector *vector, UNIT_Size index, void *new_value)
 {
     assert(vector != NULL);
-    assert(index >= 0);
-    assert(index < _UNIT_Vector_SIZE(vector));
+    assert(_UNIT_Vector_INDEX_IS_VALID(vector, index));
     if (vector->dealloc != NULL && vector->items[index] != NULL) {
         vector->dealloc(vector->context, vector->items[index]);
     }
@@ -71,8 +82,7 @@ static inline void *
 _UNIT_Vector_STEAL(_UNIT_Vector *vector, UNIT_Size index)
 {
     assert(vector != NULL);
-    assert(index >= 0);
-    assert(index < _UNIT_Vector_SIZE(vector));
+    assert(_UNIT_Vector_INDEX_IS_VALID(vector, index));
     assert(vector->items[index] != NULL);
     void *result = vector->items[index];
     vector->items[index] = NULL;

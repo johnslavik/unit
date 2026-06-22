@@ -414,13 +414,13 @@ typedef struct {
     UNIT_Size location_id;
     // Assigned when address is taken, then location_id becomes invalid
     UNIT_Size stack_slot;
-} _UNIT_LocalState;
+} LocalState;
 
 typedef struct {
     UNIT_Context *context;
     _UNIT_Map locals_map;
     UNIT_Size next_stack_slot;
-} _UNIT_LocalVariables;
+} LocalVariables;
 
 static bool
 compare_int32_deref(void *ptr_a, void *ptr_b)
@@ -435,7 +435,7 @@ hash_int32_deref(void *key)
 }
 
 static UNIT_Status
-_UNIT_LocalVariables_Init(_UNIT_LocalVariables *locals, UNIT_Context *context)
+LocalVariables_Init(LocalVariables *locals, UNIT_Context *context)
 {
     assert(locals != NULL);
     assert(context != NULL);
@@ -449,8 +449,8 @@ _UNIT_LocalVariables_Init(_UNIT_LocalVariables *locals, UNIT_Context *context)
     return _UNIT_OK;
 }
 
-_UNIT_LocalState *
-create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
+LocalState *
+create_new_local(LocalVariables *locals, int32_t name, UNIT_Size id)
 {
     assert(locals != NULL);
     // Technically the name could be negative so we won't assert here.
@@ -463,7 +463,7 @@ create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
 
     *copy = name;
 
-    _UNIT_LocalState *local_state = _UNIT_Alloc(context, sizeof(_UNIT_LocalState));
+    LocalState *local_state = _UNIT_Alloc(context, sizeof(LocalState));
     if (local_state == NULL) {
         _UNIT_Dealloc(context, copy);
         return NULL;
@@ -481,16 +481,16 @@ create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
     return local_state;
 }
 
-_UNIT_LocalState *
-get_local(_UNIT_LocalVariables *locals, int32_t name)
+LocalState *
+get_local(LocalVariables *locals, int32_t name)
 {
     assert(locals != NULL);
-    _UNIT_LocalState *local_state = _UNIT_Map_Get(&locals->locals_map, &name);
+    LocalState *local_state = _UNIT_Map_Get(&locals->locals_map, &name);
     return local_state;
 }
 
 void
-_UNIT_LocalVariables_Clear(_UNIT_LocalVariables *locals)
+LocalVariables_Clear(LocalVariables *locals)
 {
     _UNIT_Map_Clear(&locals->locals_map);
 }
@@ -499,7 +499,20 @@ typedef struct {
     UNIT_Size label_id;
     UNIT_Size local_index;
     UNIT_Size location_id;
-} _UNIT_LocalSnapshot;
+} LocalSnapshot;
+
+typedef enum {
+    DEBUG_TYPE_INT,
+    DEBUG_TYPE_STRING,
+} DebugStackType;
+
+typedef struct {
+    DebugStackType type;
+    union {
+        int64_t value;
+        const char *string;
+    };
+} DebugStackItem;
 
 UNIT_Status
 _UNIT_Translate(_UNIT_Translation *translation,
@@ -516,8 +529,8 @@ _UNIT_Translate(_UNIT_Translation *translation,
         return _UNIT_FAIL;
     }
 
-    _UNIT_LocalVariables locals;
-    if (UNIT_FAILED(_UNIT_LocalVariables_Init(&locals, context))) {
+    LocalVariables locals;
+    if (UNIT_FAILED(LocalVariables_Init(&locals, context))) {
         _UNIT_Vector_Clear(&stack);
         return _UNIT_FAIL;
     }
@@ -526,7 +539,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     _UNIT_Map_CompareEqual, _UNIT_Map_HashDirect,
                     NULL, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&stack);
-        _UNIT_LocalVariables_Clear(&locals);
+        LocalVariables_Clear(&locals);
         return _UNIT_FAIL;
     }
 
@@ -534,7 +547,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                       _UNIT_BasicBlock_Free))) {
         _UNIT_Vector_Clear(&stack);
         _UNIT_Map_Clear(&translation->strings);
-        _UNIT_LocalVariables_Clear(&locals);
+        LocalVariables_Clear(&locals);
         return _UNIT_FAIL;
     }
 
@@ -542,7 +555,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&address_taken_locals, context, 8))) {
         _UNIT_Vector_Clear(&stack);
         _UNIT_Map_Clear(&translation->strings);
-        _UNIT_LocalVariables_Clear(&locals);
+        LocalVariables_Clear(&locals);
         _UNIT_Vector_Clear(&translation->blocks);
         return _UNIT_FAIL;
     }
@@ -551,7 +564,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
     if (UNIT_FAILED(_UNIT_Vector_Init(&locals_snapshots, context, 16, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&stack);
         _UNIT_Map_Clear(&translation->strings);
-        _UNIT_LocalVariables_Clear(&locals);
+        LocalVariables_Clear(&locals);
         _UNIT_Vector_Clear(&translation->blocks);
         _UNIT_SizeSet_Clear(&address_taken_locals);
         return _UNIT_FAIL;
@@ -728,7 +741,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 }
 
                 UNIT_Size location_id = UNIQUE_ID();
-                _UNIT_LocalState *local_state = create_new_local(&locals,
+                LocalState *local_state = create_new_local(&locals,
                                                                 operation->argument,
                                                                 location_id);
                 if (local_state == NULL) {
@@ -762,7 +775,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case _UNIT_OP_LOAD_LOCAL_NAME:
             case UNIT_OP_LOAD_LOCAL: {
-                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                LocalState *local_state = get_local(&locals, operation->argument);
                 INST_CHECK_OPARG(local_state != NULL, "local variable %d not assigned");
 
                 const char *hint = NULL;
@@ -826,9 +839,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
                 _UNIT_Map_ITER(&locals.locals_map, key, value);
                     int32_t local_index = *(int32_t *)key;
-                    _UNIT_LocalState *state = (_UNIT_LocalState *)value;
-                    _UNIT_LocalSnapshot *snapshot = _UNIT_Alloc(context,
-                                                                sizeof(_UNIT_LocalSnapshot));
+                    LocalState *state = (LocalState *)value;
+                    LocalSnapshot *snapshot = _UNIT_Alloc(context,
+                                                          sizeof(LocalSnapshot));
                     if (snapshot == NULL) {
                         goto error;
                     }
@@ -860,12 +873,12 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
                 UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
                 for (UNIT_Size index = 0; index < snap_count; ++index) {
-                    _UNIT_LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
+                    LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
                     if (snap->label_id != label->id) {
                         continue;
                     }
 
-                    _UNIT_LocalState *current = get_local(&locals, snap->local_index);
+                    LocalState *current = get_local(&locals, snap->local_index);
                     if (current == NULL) {
                         continue;
                     }
@@ -1069,7 +1082,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             /* Pointers */
 
             case UNIT_OP_ADDRESS_OF: {
-                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                LocalState *local_state = get_local(&locals, operation->argument);
                 INST_CHECK_OPARG(local_state != NULL, "local variable %d not assigned");
                 assert(local_state->stack_slot != -1);
 
@@ -1129,13 +1142,13 @@ _UNIT_Translate(_UNIT_Translation *translation,
     }
 
     _UNIT_Vector_Clear(&stack);
-    _UNIT_LocalVariables_Clear(&locals);
+    LocalVariables_Clear(&locals);
     // This is so we can determine the size of the frame later
     translation->num_memory_slots = locals.next_stack_slot;
     return analyze_liveness(translation);
 error:
     _UNIT_Vector_Clear(&stack);
-    _UNIT_LocalVariables_Clear(&locals);
+    LocalVariables_Clear(&locals);
     _UNIT_Map_Clear(&translation->strings);
     _UNIT_Vector_Clear(&translation->blocks);
     _UNIT_SizeSet_Clear(&address_taken_locals);

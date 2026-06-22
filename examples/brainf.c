@@ -306,7 +306,9 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    UNIT_Procedure_PrintInstructions(&procedure, stdout);
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stdout))) {
+        goto error;
+    }
 
     UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
     if (compiled == NULL) {

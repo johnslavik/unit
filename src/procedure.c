@@ -1,5 +1,7 @@
 #include <stdbool.h>
+#include <string.h>
 
+#include <unit/errors.h>
 #include <unit/procedure.h>
 
 #include <unit/internal/allocation.h>
@@ -264,7 +266,7 @@ UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str)
 
 UNIT_Status
 UNIT_Procedure_CreateLocal(UNIT_Procedure *procedure, const char *name,
-                        UNIT_Local *local_ptr)
+                           UNIT_Local *local_ptr)
 {
     UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_local_variables);
     char *copy = _UNIT_StrDup(procedure->context, name);
@@ -356,13 +358,438 @@ UNIT_Instruction_GetName(UNIT_Instruction instruction)
     _UNIT_Unreachable();
 }
 
-void
+typedef enum {
+    DEBUG_TYPE_INT,
+    DEBUG_TYPE_STRING,
+    DEBUG_TYPE_ARITHMETIC_RESULT,
+    DEBUG_TYPE_COMPARISON_RESULT,
+    DEBUG_TYPE_ADDRESS,
+    DEBUG_TYPE_BYTES,
+    DEBUG_TYPE_LOCAL,
+    DEBUG_TYPE_LOCAL_NAME,
+    DEBUG_TYPE_ARGUMENT,
+    DEBUG_TYPE_SYMBOL_CALL_RESULT,
+    DEBUG_TYPE_PROCEDURE_CALL_RESULT,
+} DebugStackType;
+
+typedef struct {
+    DebugStackType type;
+    union {
+        int64_t value;
+        const char *string;
+    };
+} DebugStackItem;
+
+/* Print a string with newlines represented as a "\n" */
+static UNIT_Status
+print_string(UNIT_Context *context, const char *string, FILE *stream)
+{
+    assert(context != NULL);
+    assert(string != NULL);
+    assert(stream != NULL);
+
+    UNIT_Size length = strlen(string);
+    for (UNIT_Size index = 0; index < length; ++index) {
+        char character = string[index];
+        if (character == '\n') {
+            if (fputs("\\n", stream) == EOF) {
+                goto error;
+            }
+            continue;
+        }
+
+        if (fputc(character, stream) == EOF) {
+            goto error;
+        }
+    }
+
+    return _UNIT_OK;
+error:
+    _UNIT_SetOSError(context, "printing string");
+    return _UNIT_FAIL;
+}
+
+static UNIT_Status
+print_debug_item(UNIT_Context *context, DebugStackItem *item, FILE *stream)
+{
+    assert(context != NULL);
+    assert(item != NULL);
+    assert(stream != NULL);
+
+#define PRINT(...)                                      \
+    if (fprintf(stream, __VA_ARGS__) < 0) {             \
+        _UNIT_SetOSError(context, "printing stack");    \
+        return _UNIT_FAIL;                              \
+    }
+
+    switch (item->type) {
+        case DEBUG_TYPE_INT: {
+            PRINT("%ld", item->value);
+            break;
+        }
+
+        case DEBUG_TYPE_STRING: {
+            print_string(context, item->string, stream);
+            break;
+        }
+
+        case DEBUG_TYPE_ARITHMETIC_RESULT: {
+            PRINT("arithmetic_result");
+            break;
+        }
+
+        case DEBUG_TYPE_COMPARISON_RESULT: {
+            PRINT("comparison_result");
+            break;
+        }
+
+        case DEBUG_TYPE_ADDRESS: {
+            PRINT("address_of_%ld", item->value);
+            break;
+        }
+
+        case DEBUG_TYPE_BYTES: {
+            PRINT("bytes");
+            break;
+        }
+
+        case DEBUG_TYPE_LOCAL_NAME: {
+            PRINT("local_%s", item->string);
+            break;
+        }
+
+        case DEBUG_TYPE_LOCAL: {
+            PRINT("local_%ld", item->value);
+            break;
+        }
+
+        case DEBUG_TYPE_ARGUMENT: {
+            PRINT("argument_%ld", item->value);
+            break;
+        }
+
+        case DEBUG_TYPE_PROCEDURE_CALL_RESULT: {
+            PRINT("call_%s_result", item->string);
+            break;
+        }
+
+        case DEBUG_TYPE_SYMBOL_CALL_RESULT: {
+            PRINT("call_%s_result", item->string);
+            break;
+        }
+    }
+
+#undef PRINT
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+print_debug_stack(_UNIT_Vector *debug_stack, FILE *stream)
+{
+    assert(debug_stack != NULL);
+    assert(stream != NULL);
+
+#define PRINT(...)                                                  \
+    if (fprintf(stream, __VA_ARGS__) < 0) {                         \
+        _UNIT_SetOSError(debug_stack->context, "printing stack");   \
+        return _UNIT_FAIL;                                          \
+    }
+
+    PRINT("[");
+    UNIT_Size size = _UNIT_Vector_SIZE(debug_stack);
+    assert(size >= 0);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        DebugStackItem *item = _UNIT_Vector_GET(debug_stack, index);
+        assert(item != NULL);
+        if (UNIT_FAILED(print_debug_item(debug_stack->context, item, stream))) {
+            return _UNIT_FAIL;
+        }
+
+        if (index + 1 != size) {
+            PRINT(", ");
+        }
+    }
+
+    PRINT("]");
+
+#undef PRINT
+
+    return _UNIT_OK;
+}
+
+char *
+get_string(const _UNIT_Vector *table, const char *what, int64_t index)
+{
+    if (!_UNIT_Vector_INDEX_IS_VALID(table, index)) {
+        _UNIT_SetErrorFormat(table->context, UNIT_ERROR_INVALID_USAGE,
+                             "%ld is an invalid %s index", what, index);
+        return NULL;
+    }
+    char *string = _UNIT_Vector_GET(table, index);
+    assert(string != NULL);
+    return string;
+}
+
+static UNIT_Status
+deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
+                    _UNIT_Vector *debug_stack)
+{
+    assert(op != NULL);
+    assert(debug_stack != NULL);
+    UNIT_Context *context = debug_stack->context;
+    assert(context != NULL);
+
+#define POP()                                                                   \
+    if (_UNIT_Vector_SIZE(debug_stack) == 0) {                                  \
+        _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,                 \
+                      "stack underflow at %s",                                  \
+                      UNIT_Instruction_GetName(op->instruction));               \
+        return _UNIT_FAIL;                                                      \
+    }                                                                           \
+    /* TODO: This leaks */                                                      \
+    _UNIT_Vector_Pop(debug_stack);
+
+#define PUSH(tp, the_value)                                                     \
+    do {                                                                        \
+        DebugStackItem *item = _UNIT_Alloc(context, sizeof(DebugStackItem));    \
+        if (item == NULL) {                                                     \
+            return _UNIT_FAIL;                                                  \
+        }                                                                       \
+        item->type = tp;                                                        \
+        item->value = (int64_t)(the_value);                                     \
+        if (UNIT_FAILED(_UNIT_Vector_Append(debug_stack, item))) {              \
+            return _UNIT_FAIL;                                                  \
+        }                                                                       \
+    } while (0)
+
+    int64_t oparg = op->argument;
+
+    switch (op->instruction) {
+        case UNIT_OP_LOAD_INTEGER: {
+            PUSH(DEBUG_TYPE_INT, oparg);
+            break;
+        }
+
+        case UNIT_OP_LOAD_STRING: {
+            char *string = get_string(&procedure->_global_strings, "string", oparg);
+            if (string == NULL) {
+                return _UNIT_FAIL;
+            }
+            PUSH(DEBUG_TYPE_STRING, string);
+            break;
+        }
+
+        case UNIT_OP_LOAD_LOCAL: {
+            PUSH(DEBUG_TYPE_LOCAL, oparg);
+            break;
+        }
+
+        case _UNIT_OP_LOAD_LOCAL_NAME: {
+            PUSH(DEBUG_TYPE_LOCAL_NAME, oparg);
+            break;
+        }
+
+        case _UNIT_OP_STORE_LOCAL_NAME: {
+            char *name = get_string(&procedure->_local_variables, "variable", oparg);
+            if (name == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            PUSH(DEBUG_TYPE_LOCAL_NAME, name);
+            break;
+        }
+
+        case UNIT_OP_STORE_LOCAL: {
+            POP();
+            break;
+        }
+
+        case UNIT_OP_PREPARE_CALL: {
+            for (int64_t i = 0; i < oparg; ++i) {
+                POP();
+            }
+            break;
+        }
+
+        case UNIT_OP_CALL_NAME: {
+            char *symbol = get_string(&procedure->_symbols, "symbol", oparg);
+            if (symbol == NULL) {
+                return _UNIT_FAIL;
+            }
+            PUSH(DEBUG_TYPE_SYMBOL_CALL_RESULT, symbol);
+            break;
+        }
+
+        case UNIT_OP_CALL_PROCEDURE: {
+            if (!_UNIT_Vector_INDEX_IS_VALID(&procedure->_subprocedures, oparg)) {
+                _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,
+                                     "%ld is not a valid subprocedure index", oparg);
+                return _UNIT_FAIL;
+            }
+            UNIT_Procedure *procedure = _UNIT_Vector_GET(&procedure->_subprocedures, oparg);
+            assert(procedure != NULL);
+            PUSH(DEBUG_TYPE_PROCEDURE_CALL_RESULT, procedure->name);
+            break;
+        }
+
+#define BINARY_OP(name)                             \
+    case name: {                                    \
+        POP();                                      \
+        POP();                                      \
+        PUSH(DEBUG_TYPE_ARITHMETIC_RESULT, 0);      \
+        break;                                      \
+    }
+
+        BINARY_OP(UNIT_OP_ADD);
+        BINARY_OP(UNIT_OP_SUBTRACT);
+        BINARY_OP(UNIT_OP_MULTIPLY);
+        BINARY_OP(UNIT_OP_DIVIDE);
+        BINARY_OP(UNIT_OP_MODULO);
+
+#undef BINARY_OP
+
+        case _UNIT_OP_JUMP_MARKER:
+        case UNIT_OP_JUMP_TO: {
+            break;
+        }
+
+        case UNIT_OP_JUMP_IF_TRUE:
+        case UNIT_OP_JUMP_IF_FALSE:
+        case UNIT_OP_EXIT:
+        case UNIT_OP_RETURN_VALUE: {
+            POP();
+            break;
+        }
+
+        case UNIT_OP_LOAD_ARGUMENT: {
+            PUSH(DEBUG_TYPE_ARGUMENT, oparg);
+            break;
+        }
+
+#define COMPARISON(name)                            \
+        case name: {                                \
+            POP();                                  \
+            POP();                                  \
+            PUSH(DEBUG_TYPE_COMPARISON_RESULT, 0);  \
+            break;                                  \
+        }
+
+        COMPARISON(UNIT_OP_COMPARE_EQUAL);
+        COMPARISON(UNIT_OP_COMPARE_NOT_EQUAL);
+        COMPARISON(UNIT_OP_COMPARE_GREATER);
+        COMPARISON(UNIT_OP_COMPARE_GREATER_EQUAL);
+        COMPARISON(UNIT_OP_COMPARE_LESS);
+        COMPARISON(UNIT_OP_COMPARE_LESS_EQUAL);
+
+#undef COMPARISON
+
+        case UNIT_OP_COPY: {
+            UNIT_Size offset = _UNIT_Vector_SIZE(debug_stack) - oparg - 1;
+            if (!_UNIT_Vector_INDEX_IS_VALID(debug_stack, offset)) {
+                _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,
+                                     "invalid offset: %ld", oparg);
+                return _UNIT_FAIL;
+            }
+
+            DebugStackItem *item = _UNIT_Vector_GET(debug_stack, offset);
+            assert(item != NULL);
+
+            DebugStackItem *copy = _UNIT_Alloc(context, sizeof(DebugStackItem));
+            if (copy == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            memcpy(copy, item, sizeof(DebugStackItem));
+            if (UNIT_FAILED(_UNIT_Vector_Append(debug_stack, item))) {
+                return _UNIT_FAIL;
+            }
+
+            break;
+        }
+
+        case UNIT_OP_SWAP: {
+            UNIT_Size offset = _UNIT_Vector_SIZE(debug_stack) - oparg - 1;
+            if (!_UNIT_Vector_INDEX_IS_VALID(debug_stack, offset)) {
+                _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,
+                                     "invalid offset: %ld", oparg);
+                return _UNIT_FAIL;
+            }
+
+            // If the stack were empty, the above case would have failed.
+            assert(_UNIT_Vector_SIZE(debug_stack) > 0);
+
+            DebugStackItem *top = _UNIT_Vector_STEAL(debug_stack, 0);
+            assert(top != NULL);
+            DebugStackItem *at_offset = _UNIT_Vector_STEAL(debug_stack, offset);
+            assert(at_offset != NULL);
+
+            _UNIT_Vector_SET(debug_stack, 0, at_offset);
+            _UNIT_Vector_SET(debug_stack, offset, top);
+
+            break;
+        }
+
+        case UNIT_OP_POP: {
+            POP();
+            break;
+        }
+
+        case UNIT_OP_ADDRESS_OF: {
+            PUSH(DEBUG_TYPE_ADDRESS, oparg);
+            break;
+        }
+
+        case UNIT_OP_WRITE_BYTES:
+        case UNIT_OP_READ_BYTES: {
+            switch (oparg) {
+                case 1:
+                case 2:
+                case 4:
+                case 8:
+                    break;
+
+                default: {
+                    _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,
+                                         "can only read/write 1, 2, 4, or 8 bytes, not %ld");
+                    break;
+                }
+            }
+
+            if (op->instruction == UNIT_OP_READ_BYTES) {
+                PUSH(DEBUG_TYPE_BYTES, oparg);
+            }
+            break;
+        }
+
+        case UNIT_OP_CONVERT: {
+            break;
+        }
+    }
+
+    return _UNIT_OK;
+}
+
+UNIT_Status
 UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
 {
     assert(procedure != NULL);
     assert(stream != NULL);
+    int8_t visualize_stack_effect = 1;
 
-    fprintf(stream, "procedure \"%s\":\n", procedure->name);
+    _UNIT_Vector debug_stack;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&debug_stack, procedure->context,
+                                      8, _UNIT_Dealloc))) {
+        return _UNIT_FAIL;
+    }
+
+#define PRINT(...)                                          \
+    if (fprintf(stream, __VA_ARGS__) < 0) {                 \
+        _UNIT_SetOSError(procedure->context, "printing");   \
+        goto error;                                         \
+    }
+
+    PRINT("procedure \"%s\":\n", procedure->name);
     UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions,
@@ -372,11 +799,11 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
             UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels, operation->argument);
             assert(label != NULL);
             assert(label->name != NULL);
-            fprintf(stream, "    label %s [%d]:\n", label->name, label->id);
+            PRINT("    label %s [%d]:\n", label->name, label->id);
             continue;
         }
 
-        fprintf(stream, "    %ld    %s", index, UNIT_Instruction_GetName(operation->instruction));
+        PRINT("    %ld    %s", index, UNIT_Instruction_GetName(operation->instruction));
         if (operation->argument != 0
             || operation->instruction == UNIT_OP_LOAD_INTEGER
             || operation->instruction == UNIT_OP_LOAD_ARGUMENT
@@ -385,7 +812,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
             || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
             || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
             || operation->instruction == UNIT_OP_ADDRESS_OF) {
-            fprintf(stream, "  %ld", (long)operation->argument);
+            PRINT("  %ld", (long)operation->argument);
         }
 
         switch (operation->instruction) {
@@ -393,21 +820,24 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 const char *name = _UNIT_Vector_GET(&procedure->_symbols,
                                                     operation->argument);
                 assert(name != NULL);
-                fprintf(stream, " (%s)", name);
+                PRINT(" (%s)", name);
                 break;
             }
+
             case UNIT_OP_CALL_PROCEDURE: {
                 UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures,
                                                                 operation->argument);
                 assert(subprocedure != NULL);
-                fprintf(stream, " (%p: %s)", subprocedure, subprocedure->name);
+                PRINT(" (%p: %s)", subprocedure, subprocedure->name);
                 break;
             }
             case UNIT_OP_LOAD_STRING: {
                 const char *text = _UNIT_Vector_GET(&procedure->_global_strings,
                                                     operation->argument);
                 assert(text != NULL);
-                fprintf(stream, " (%s)", text);
+                PRINT(" (");
+                print_string(procedure->context, text, stream);
+                PRINT(")");
                 break;
             }
             case _UNIT_OP_STORE_LOCAL_NAME:
@@ -415,7 +845,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 const char *name = _UNIT_Vector_GET(&procedure->_local_variables,
                                                     operation->argument);
                 assert(name != NULL);
-                fprintf(stream, " (%s)", name);
+                PRINT(" (%s)", name);
                 break;
             }
             case UNIT_OP_JUMP_TO:
@@ -424,7 +854,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels,
                                                          operation->argument);
                 assert(label != NULL);
-                fprintf(stream, " (%s [%d])", label->name, label->id);
+                PRINT(" (%s [%d])", label->name, label->id);
                 break;
 
             }
@@ -433,6 +863,26 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 break;
         }
 
-        fprintf(stream, "\n");
+        PRINT("\n");
+
+        if (visualize_stack_effect) {
+            PRINT("      ");
+
+            if (UNIT_FAILED(deduce_stack_effect(procedure, operation, &debug_stack))) {
+                goto error;
+            }
+
+            if (UNIT_FAILED(print_debug_stack(&debug_stack, stream))) {
+                goto error;
+            }
+
+            PRINT("\n");
+        }
     }
+
+    _UNIT_Vector_Clear(&debug_stack);
+    return _UNIT_OK;
+error:
+    _UNIT_Vector_Clear(&debug_stack);
+    return _UNIT_FAIL;
 }

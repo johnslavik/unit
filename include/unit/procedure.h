@@ -100,12 +100,12 @@ typedef enum {
 typedef struct {
     UNIT_Context *context;
     char *name;
-    _UNIT_Vector _instructions;
-    _UNIT_Vector _global_strings;
-    _UNIT_Vector _symbols;
-    _UNIT_Vector _jump_labels;
-    _UNIT_Vector _local_variables;
-    _UNIT_Vector _subprocedures;
+    _UNIT_Vector _instructions; // Contains _UNIT_Operation * (heap-allocated)
+    _UNIT_Vector _global_strings; // Contains char * (heap-allocated)
+    _UNIT_Vector _symbols; // Contains char * (heap-allocated)
+    _UNIT_Vector _jump_labels; // Contains UNIT_JumpLabel * (heap-allocated)
+    _UNIT_Vector _local_variables; // Contains char * (heap-allocated)
+    _UNIT_Vector _subprocedures; // Contains UNIT_Procedure * (borrowed)
 } UNIT_Procedure;
 
 UNIT_Status
@@ -165,7 +165,7 @@ UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,
 const char *
 UNIT_Instruction_GetName(UNIT_Instruction instruction);
 
-void
+UNIT_Status
 UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream);
 
 #ifdef __cplusplus
