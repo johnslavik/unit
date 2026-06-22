@@ -1143,6 +1143,8 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
     _UNIT_Vector_Clear(&stack);
     LocalVariables_Clear(&locals);
+    _UNIT_SizeSet_Clear(&address_taken_locals);
+    _UNIT_Vector_Clear(&locals_snapshots);
     // This is so we can determine the size of the frame later
     translation->num_memory_slots = locals.next_stack_slot;
     return analyze_liveness(translation);

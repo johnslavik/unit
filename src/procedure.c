@@ -547,8 +547,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
                       UNIT_Instruction_GetName(op->instruction));               \
         return _UNIT_FAIL;                                                      \
     }                                                                           \
-    /* TODO: This leaks */                                                      \
-    _UNIT_Vector_Pop(debug_stack);
+    _UNIT_Dealloc(context, _UNIT_Vector_Pop(debug_stack));
 
 #define PUSH(tp, the_value)                                                     \
     do {                                                                        \
@@ -701,7 +700,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
             }
 
             memcpy(copy, item, sizeof(DebugStackItem));
-            if (UNIT_FAILED(_UNIT_Vector_Append(debug_stack, item))) {
+            if (UNIT_FAILED(_UNIT_Vector_Append(debug_stack, copy))) {
                 return _UNIT_FAIL;
             }
 

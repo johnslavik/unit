@@ -102,6 +102,7 @@ _UNIT_SymbolTable_Clear(_UNIT_SymbolTable *symbol_table)
 {
     assert(symbol_table != NULL);
     _UNIT_Vector_Clear(&symbol_table->relocations);
+    _UNIT_Vector_Clear(&symbol_table->symbols);
 }
 
 _UNIT_PendingJump *

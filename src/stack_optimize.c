@@ -66,6 +66,8 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             return _UNIT_FAIL;                                                      \
         }
 
+    #define CONTINUE_AND_DISCARD() _UNIT_Dealloc(context, op); continue
+
     int8_t dead_code = 0;
 
     for (UNIT_Size index = 0; index < size; ++index) {
@@ -80,7 +82,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
         }
 
         if (dead_code) {
-            continue;
+            CONTINUE_AND_DISCARD();
         }
 
         switch (op->instruction) {
@@ -159,7 +161,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 
                     ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER, result);
                     PUSH(STACK_CONSTANT, result);
-                    continue;
+                    CONTINUE_AND_DISCARD();
                 } else {
                     PUSH(STACK_UNKNOWN, 0);
                 }
@@ -263,8 +265,8 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                     case UNIT_OP_READ_BYTES:
                     case UNIT_OP_ADDRESS_OF:
                     case UNIT_OP_LOAD_LOCAL:
-                        _UNIT_Vector_Pop(&optimized);
-                        continue;
+                        _UNIT_Dealloc(context, _UNIT_Vector_Pop(&optimized));
+                        CONTINUE_AND_DISCARD();
                     default:
                         break;
                 }
@@ -288,7 +290,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                         ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
                         dead_code = 1;
                     }
-                    continue;
+                    CONTINUE_AND_DISCARD();
                 }
                 RESET_STACK();
                 break;
@@ -303,7 +305,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                         ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
                         dead_code = 1;
                     }
-                    continue;
+                    CONTINUE_AND_DISCARD();
                 }
 
                 RESET_STACK();
@@ -353,7 +355,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                 if (entry.kind == STACK_ADDRESS) {
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
                     ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_LOCAL, op->argument);
-                    break;
+                    CONTINUE_AND_DISCARD();
                 }
                 PUSH(STACK_UNKNOWN, 0);
                 break;
@@ -388,6 +390,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 #undef RESET_STACK
 #undef APPEND
 #undef ADD_NEW_INSTRUCTION
+#undef CONTINUE_AND_DISCARD
 
     _UNIT_Vector old = procedure->_instructions;
     procedure->_instructions = optimized;
@@ -575,7 +578,7 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
 
     _UNIT_Vector optimized;
-    if (UNIT_FAILED(_UNIT_Vector_Init(&optimized, context, size, NULL))) {
+    if (UNIT_FAILED(_UNIT_Vector_Init(&optimized, context, size, _UNIT_Dealloc))) {
         return _UNIT_FAIL;
     }
 
@@ -594,6 +597,8 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
             _UNIT_Vector_APPEND(&optimized, op);
             continue;
         }
+
+        _UNIT_Dealloc(context, op);
 
         _UNIT_Operation *prepare_call = _UNIT_Vector_Pop(&optimized);
         assert(prepare_call->instruction == UNIT_OP_PREPARE_CALL);
@@ -783,6 +788,8 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
             goto error;                                                             \
         }
 
+    #define CONTINUE_AND_DISCARD() _UNIT_Dealloc(context, op); continue
+
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
         assert(op != NULL);
@@ -799,7 +806,7 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
                     // This is a dead store. Consume the value with pop, which
                     // can be folded out later.
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
-                    continue;
+                    CONTINUE_AND_DISCARD();
                 }
 
                 if (index + 1 >= size) {
@@ -815,6 +822,7 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
 
                     // Skip the load
                     ++index;
+                    _UNIT_Dealloc(context, _UNIT_Vector_STEAL(instructions, index));
                     continue;
                 }
 
@@ -829,7 +837,7 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
                     && !info[local_index].address_taken) {
                     // Propagate constant
                     ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER, info[local_index].constant_value);
-                    continue;
+                    CONTINUE_AND_DISCARD();
                 }
 
                 break;
@@ -843,6 +851,7 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
     }
 
 #undef ADD_NEW_INSTRUCTION
+#undef CONTINUE_AND_DISCARD
 
     _UNIT_Dealloc(context, info);
     _UNIT_Vector_Clear(instructions);
