@@ -71,7 +71,7 @@ typedef enum {
 
 typedef struct {
     UNIT_Instruction instruction;
-    UNIT_Size argument;
+    int64_t argument;
 } _UNIT_Operation;
 
 typedef struct {

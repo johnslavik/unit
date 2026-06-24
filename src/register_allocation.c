@@ -165,7 +165,7 @@ assign_destination_register(_UNIT_RegisterAllocator *allocator,
         return;
     }
 
-    _UNIT_MachineItem *item = _UNIT_MachineDestination_GetPointer (op->destination);
+    _UNIT_MachineItem *item = _UNIT_MachineDestination_GetPointer(op->destination);
     if (item->type != _UNIT_TYPE_LOCATION) {
         return;
     }

@@ -589,7 +589,8 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
     UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
 
-    // TODO: This is ugly
+    // TODO: This is ugly. We should refactor this out into a more generic
+    // analysis/metadata pass.
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
         assert(operation != NULL);
