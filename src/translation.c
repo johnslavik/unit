@@ -89,7 +89,7 @@ UNIT_Status
 emit_machine_instruction(UNIT_Context *context,
                          _UNIT_BasicBlock *block,
                          _UNIT_MachineInstruction instruction,
-                         _UNIT_MachineItem *destination,
+                         _UNIT_MachineDestination destination,
                          _UNIT_MachineItem *arg1,
                          _UNIT_MachineItem *arg2)
 {
@@ -109,6 +109,14 @@ emit_machine_instruction(UNIT_Context *context,
     if (UNIT_FAILED(_UNIT_Vector_Append(&block->instructions,
                                         operation))) {
         return _UNIT_FAIL;
+    }
+
+    if (!_UNIT_MachineDestination_IsNull(destination)
+        && _UNIT_MachineDestination_IsInput(destination)) {
+        _UNIT_MachineItem *unwrapped = _UNIT_MachineDestination_GetPointer(destination);
+        if (UNIT_FAILED(mark_last_use(block, unwrapped))) {
+            return _UNIT_FAIL;
+        }
     }
 
     if (arg1 != NULL) {
@@ -193,27 +201,36 @@ print_instruction_stream(FILE *stream, _UNIT_Vector *instructions)
                                                              index);
         assert(operation != NULL);
         if (operation->instruction == _UNIT_I_JUMP_LABEL) {
-            assert(operation->destination != NULL);
-            assert(operation->destination->hint != NULL);
             // There should be a "block ..." right before this
-            fprintf(stream, ", label %s (%ld):\n", operation->destination->hint,
-                    operation->destination->value);
+            _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointer(operation->destination);
+            fprintf(stream, ", label %s (%ld):\n", destination->hint,
+                    destination->value);
             continue;
         }
         assert(operation != NULL);
         fprintf(stream, "        ");
-        if (operation->destination != NULL) {
-            print_machine_item(stream, operation->destination);
+        _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointerNullable(operation->destination);
+        int8_t is_input = _UNIT_MachineDestination_IsInput(operation->destination);
+        if (destination != NULL && !is_input) {
+            print_machine_item(stream, destination);
             fprintf(stream, " = ");
         }
 
         fprintf(stream, "%s(", machine_instruction_name(operation->instruction));
+        if (destination != NULL && is_input) {
+            // There's no reason to use the destination as an input if one of
+            // the other two arguments are free.
+            assert(operation->argument_1 != NULL);
+            assert(operation->argument_2 != NULL);
+            print_machine_item(stream, destination);
+            fprintf(stream, ", ");
+        }
         if (operation->argument_1 != NULL) {
             print_machine_item(stream, operation->argument_1);
         }
 
         if (operation->argument_2 != NULL) {
-            assert(operation->argument_1 != NULL || operation->destination != NULL);
+            assert(operation->argument_1 != NULL || !_UNIT_MachineDestination_IsNull(operation->destination));
             fprintf(stream, ", ");
             print_machine_item(stream, operation->argument_2);
         }
@@ -646,38 +663,38 @@ _UNIT_Translate(_UNIT_Translation *translation,
             goto error;                                                                             \
         }
 
-    #define EMIT_EMPTY(inst)                                                                            \
-        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, NULL, NULL, NULL))) {  \
-            goto error;                                                                                 \
+    #define EMIT_EMPTY(inst)                                                                                                        \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, _UNIT_MachineDestination_NULL, NULL, NULL))) {     \
+            goto error;                                                                                                             \
         }
 
-    #define EMIT_ONE(inst, arg1)                                                                        \
-        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, NULL, arg1, NULL))) {  \
-            goto error;                                                                                 \
+    #define EMIT_ONE(inst, arg1)                                                                                                    \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, _UNIT_MachineDestination_NULL, arg1, NULL))) {     \
+            goto error;                                                                                                             \
         }
 
-    #define EMIT_DEST(inst, dest)                                                                       \
-        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, NULL, NULL))) {  \
-            goto error;                                                                                 \
+    #define EMIT_DEST(inst, dest)                                                                                   \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst,                                    \
+                                                 _UNIT_MachineDestination_FromDestination(dest), NULL, NULL))) {    \
+            goto error;                                                                                             \
         }
 
-    #define EMIT_DEST_ONE(inst, dest, arg1)                                                             \
-        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, arg1, NULL))) {  \
-            goto error;                                                                                 \
+    #define EMIT_DEST_ONE(inst, dest, arg1)                                                                         \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst,                                    \
+                                                 _UNIT_MachineDestination_FromDestination(dest), arg1, NULL))) {    \
+            goto error;                                                                                             \
         }
 
-    #define EMIT_DEST_TWO(inst, dest, arg1, arg2)                                                       \
-        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, arg1, arg2))) {  \
-            goto error;                                                                                 \
+    #define EMIT_DEST_TWO(inst, dest, arg1, arg2)                                                                   \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst,                                    \
+                                                 _UNIT_MachineDestination_FromDestination(dest), arg1, arg2))) {    \
+            goto error;                                                                                             \
         }
 
-    #define EMIT_THREE(inst, arg1, arg2, arg3)                                                          \
-        /* The destination is repurposed as arg1, so we have to manually mark it as a use. */           \
-        if (UNIT_FAILED(mark_last_use(CURRENT_BLOCK(), arg1))) {                                        \
-            goto error;                                                                                 \
-        }                                                                                               \
-        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, arg1, arg2, arg3))) {  \
-            goto error;                                                                                 \
+    #define EMIT_THREE(inst, arg1, arg2, arg3)                                                              \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst,                            \
+                                                 _UNIT_MachineDestination_FromInput(arg1), arg2, arg3))) {  \
+            goto error;                                                                                     \
         }
 
     #define CREATE_DESTINATION(name)                                                                \
@@ -1139,6 +1156,12 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
         }
+    }
+
+    if (_UNIT_Vector_SIZE(&stack) != 0) {
+        _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE,
+                       "procedure does not consume entire stack");
+        goto error;
     }
 
     _UNIT_Vector_Clear(&stack);

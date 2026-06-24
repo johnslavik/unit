@@ -76,6 +76,7 @@ codegen_prelude(UNIT_Procedure *procedure)
 
     ADDOP_STR("brainfuck");
     ADDOP_CALL("perror", 1);
+    ADDOP(UNIT_OP_POP);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
     ADDOP(UNIT_OP_EXIT);
 
@@ -306,7 +307,7 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stdout))) {
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stdout, 1))) {
         goto error;
     }
 

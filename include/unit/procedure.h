@@ -166,7 +166,7 @@ const char *
 UNIT_Instruction_GetName(UNIT_Instruction instruction);
 
 UNIT_Status
-UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream);
+UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream, int8_t visualize_stack_effect);
 
 #ifdef __cplusplus
 }

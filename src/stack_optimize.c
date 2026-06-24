@@ -151,6 +151,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                                 return _UNIT_FAIL;
                             }
                             result = left.value % right.value;
+                            break;
                         default:
                             _UNIT_Unreachable();
                     }
@@ -868,7 +869,7 @@ error:
 UNIT_Status
 UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
 {
-    for (int i = 0; i <= 5; ++i) {
+    for (int i = 0; i <= 1; ++i) {
         if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
             return _UNIT_FAIL;
         }

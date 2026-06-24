@@ -93,6 +93,19 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
     }
 }
 
+static _UNIT_MachineItem *
+generic_item_passthrough(_UNIT_MachineItem *item)
+{
+    assert(item != NULL);
+    return item;
+}
+
+#define ENSURE_VALID_ITEM(item)                                                         \
+    _Generic((item),                                                                    \
+             _UNIT_MachineItem*: generic_item_passthrough,                              \
+             _UNIT_MachineDestination: _UNIT_MachineDestination_GetPointerNullable      \
+            )(item)
+
 
 #define NO_ARGS_HELPER(name, opcode_name)                                                       \
     static inline AMD64_Instruction *                                                           \
@@ -231,17 +244,17 @@ preserve_register(_UNIT_CompileContext *compile_context,
     assert(compile_context != NULL);
     assert(operation != NULL);
     assert(slot_ptr != NULL);
-#define IGNORE_IF_TARGET(name)                                      \
-    if (operation->name != NULL                                     \
-        && operation->name->type == _UNIT_TYPE_REGISTER             \
-        && register_map[operation->name->value] == to_preserve) {   \
+#define IGNORE_IF_TARGET(val)                                      \
+    if ((val) != NULL                                     \
+        && (val)->type == _UNIT_TYPE_REGISTER             \
+        && register_map[(val)->value] == to_preserve) {   \
         *slot_ptr = -1;                                             \
         return _UNIT_OK;                                             \
     }
 
-    IGNORE_IF_TARGET(destination);
-    IGNORE_IF_TARGET(argument_1);
-    IGNORE_IF_TARGET(argument_2);
+    IGNORE_IF_TARGET(_UNIT_MachineDestination_GetPointerNullable(operation->destination));
+    IGNORE_IF_TARGET(operation->argument_1);
+    IGNORE_IF_TARGET(operation->argument_2);
 
     UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
     EMIT(mov(compile_context->context, stack_slot(slot), reg(to_preserve)));
@@ -277,17 +290,17 @@ translate_operation(_UNIT_CompileContext *compile_context,
     assert(epilogue_patches != NULL);
     UNIT_Context *ctx = compile_context->context;
 
-#define OP(value) machine_item_to_operand(operation->value)
+#define OP(value) machine_item_to_operand(ENSURE_VALID_ITEM(operation->value))
 
-#define USE_SCRATCH_REGISTER(name)                                                                  \
-    AMD64_Operand name;                                                                             \
-    if (UNIT_FAILED(use_scratch_register_if_needed(compile_context, operation->name, &name))) {     \
-        return _UNIT_FAIL;                                                                          \
+#define USE_SCRATCH_REGISTER(name)                                                                                      \
+    AMD64_Operand name;                                                                                                 \
+    if (UNIT_FAILED(use_scratch_register_if_needed(compile_context, ENSURE_VALID_ITEM(operation->name), &name))) {      \
+        return _UNIT_FAIL;                                                                                              \
     }
 
-#define UNDO_SCRATCH_REGISTER(name)                                                                 \
-    if (UNIT_FAILED(undo_scratch_register_if_used(compile_context, operation->name, name))) {       \
-        return _UNIT_FAIL;                                                                          \
+#define UNDO_SCRATCH_REGISTER(name)                                                                                     \
+    if (UNIT_FAILED(undo_scratch_register_if_used(compile_context, ENSURE_VALID_ITEM(operation->name), name))) {        \
+        return _UNIT_FAIL;                                                                                              \
     }
 
 #define PRESERVE_REGISTER(name)                                                             \

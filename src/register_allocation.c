@@ -137,19 +137,52 @@ rewrite_block_locations(_UNIT_RegisterAllocator *allocator,
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *operation = _UNIT_Vector_GET(&block->instructions,
                                                              index);
-#define POTENTIALLY_REWRITE(name)                                                   \
-        if (UNIT_FAILED(potentially_rewrite_item(allocator, operation->name))) {    \
-            return _UNIT_FAIL;                                                       \
+
+        if (UNIT_FAILED(potentially_rewrite_item(allocator,
+                                                 _UNIT_MachineDestination_GetPointerNullable(operation->destination)))) {
+            return _UNIT_FAIL;
         }
 
-        POTENTIALLY_REWRITE(destination);
-        POTENTIALLY_REWRITE(argument_1);
-        POTENTIALLY_REWRITE(argument_2);
+        if (UNIT_FAILED(potentially_rewrite_item(allocator, operation->argument_1))) {
+            return _UNIT_FAIL;
+        }
 
-#undef POTENTIALLY_REWRITE
+        if (UNIT_FAILED(potentially_rewrite_item(allocator, operation->argument_2))) {
+            return _UNIT_FAIL;
+        }
     }
 
     return _UNIT_OK;
+}
+
+static void
+assign_destination_register(_UNIT_RegisterAllocator *allocator,
+                            _UNIT_MachineOperation *op,
+                            _UNIT_SizeSet *registers_in_use)
+{
+    if (_UNIT_MachineDestination_IsNull(op->destination)
+        || _UNIT_MachineDestination_IsInput(op->destination)) {
+        return;
+    }
+
+    _UNIT_MachineItem *item = _UNIT_MachineDestination_GetPointer (op->destination);
+    if (item->type != _UNIT_TYPE_LOCATION) {
+        return;
+    }
+
+    UNIT_Size location = item->value;
+    UNIT_Size existing;
+    if (!UNIT_FAILED(_UNIT_SizeMap_Get(&allocator->assignments, location, &existing))) {
+        return;
+    }
+
+    for (UNIT_Size register_id = 0; register_id < allocator->num_registers; ++register_id) {
+        if (!_UNIT_SizeSet_Contains(registers_in_use, register_id)) {
+            _UNIT_SizeMap_Set(&allocator->assignments, location, register_id);
+            _UNIT_SizeSet_Add(registers_in_use, register_id);
+            return;
+        }
+    }
 }
 
 static UNIT_Status
@@ -179,32 +212,17 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator,
         _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions,
                                                        index);
 
-        // Step 1: Rewrite arguments (they reference previously assigned locations)
         potentially_rewrite_item(allocator, op->argument_1);
         potentially_rewrite_item(allocator, op->argument_2);
 
-        // Step 2: Free dead registers
         free_dead_registers(allocator, block, index, &registers_in_use);
 
-        // Step 3: Assign register to destination if needed
-        if (op->destination != NULL
-            && op->destination->type == _UNIT_TYPE_LOCATION) {
-            UNIT_Size location = op->destination->value;
-            UNIT_Size existing;
-            if (UNIT_FAILED(_UNIT_SizeMap_Get(assignments, location,
-                                               &existing))) {
-                for (UNIT_Size r = 0; r < allocator->num_registers; ++r) {
-                    if (!_UNIT_SizeSet_Contains(&registers_in_use, r)) {
-                        _UNIT_SizeMap_Set(assignments, location, r);
-                        _UNIT_SizeSet_Add(&registers_in_use, r);
-                        break;
-                    }
-                }
-            }
-        }
+        assign_destination_register(allocator, op, &registers_in_use);
 
-        // Step 4: Rewrite destination
-        potentially_rewrite_item(allocator, op->destination);
+        _UNIT_MachineItem *dest_item = _UNIT_MachineDestination_GetPointerNullable(op->destination);
+        if (UNIT_FAILED(potentially_rewrite_item(allocator, dest_item))) {
+            return _UNIT_FAIL;
+        }
     }
 
     _UNIT_SizeSet_Clear(&registers_in_use);

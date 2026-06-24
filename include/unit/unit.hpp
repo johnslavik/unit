@@ -558,7 +558,7 @@ public:
     void
     print_instructions(FILE *stream = stdout)
     {
-        if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stream))) {
+        if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stream, 1))) {
             throw error(procedure.context);
         }
     }

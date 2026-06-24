@@ -43,6 +43,56 @@ typedef struct _UNIT_MachineItem {
     } created_by;
 } _UNIT_MachineItem;
 
+typedef struct {
+    uintptr_t _tagged;
+} _UNIT_MachineDestination;
+
+#define _UNIT_MachineDestination_NULL ((_UNIT_MachineDestination) {._tagged = 0})
+
+static inline _UNIT_MachineDestination
+_UNIT_MachineDestination_FromDestination(_UNIT_MachineItem *item)
+{
+    assert(item != NULL);
+    assert(((uintptr_t)item & 1) == 0); // Must be aligned
+    return (_UNIT_MachineDestination){ (uintptr_t)item };
+}
+
+static inline _UNIT_MachineDestination
+_UNIT_MachineDestination_FromInput(_UNIT_MachineItem *item)
+{
+    assert(item != NULL);
+    assert(((uintptr_t)item & 1) == 0);
+    return (_UNIT_MachineDestination){ (uintptr_t)item | 1 };
+}
+
+static inline int8_t
+_UNIT_MachineDestination_IsInput(_UNIT_MachineDestination dest)
+{
+    return (int8_t)(dest._tagged & 1);
+}
+
+static inline int8_t
+_UNIT_MachineDestination_IsNull(_UNIT_MachineDestination dest)
+{
+    return dest._tagged == 0;
+}
+
+static inline _UNIT_MachineItem *
+_UNIT_MachineDestination_GetPointer(_UNIT_MachineDestination dest)
+{
+    assert(dest._tagged != 0);
+    return (_UNIT_MachineItem *)(dest._tagged & ~(uintptr_t)1);
+}
+
+static inline _UNIT_MachineItem *
+_UNIT_MachineDestination_GetPointerNullable(_UNIT_MachineDestination dest)
+{
+    if (_UNIT_MachineDestination_IsNull(dest)) {
+        return NULL;
+    }
+    return _UNIT_MachineDestination_GetPointer(dest);
+}
+
 typedef enum {
     // General
     _UNIT_I_MOVE,
@@ -85,7 +135,7 @@ typedef enum {
 
 typedef struct {
     _UNIT_MachineInstruction instruction;
-    _UNIT_MachineItem *destination;
+    _UNIT_MachineDestination destination;
     _UNIT_MachineItem *argument_1;
     _UNIT_MachineItem *argument_2;
 } _UNIT_MachineOperation;

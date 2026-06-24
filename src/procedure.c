@@ -429,7 +429,9 @@ print_debug_item(UNIT_Context *context, DebugStackItem *item, FILE *stream)
         }
 
         case DEBUG_TYPE_STRING: {
+            PRINT("\"");
             print_string(context, item->string, stream);
+            PRINT("\"");
             break;
         }
 
@@ -735,8 +737,13 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
             break;
         }
 
-        case UNIT_OP_WRITE_BYTES:
+        case UNIT_OP_WRITE_BYTES: {
+            POP();
+            // fallthrough
+        }
         case UNIT_OP_READ_BYTES: {
+            POP();
+
             switch (oparg) {
                 case 1:
                 case 2:
@@ -766,11 +773,11 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
 }
 
 UNIT_Status
-UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
+UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream,
+                                 int8_t visualize_stack_effect)
 {
     assert(procedure != NULL);
     assert(stream != NULL);
-    int8_t visualize_stack_effect = 1;
 
     _UNIT_Vector debug_stack;
     if (UNIT_FAILED(_UNIT_Vector_Init(&debug_stack, procedure->context,
