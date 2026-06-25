@@ -473,6 +473,13 @@ remap_offsets(UNIT_Procedure *procedure,
     UNIT_Size nargs = offsets->args_offset;
     UNIT_Size local_offset = offsets->local_offset;
 
+    char return_name[128];
+    snprintf(return_name, sizeof(return_name), "_inlined_%s_return", target->name);
+    UNIT_JumpLabel *end_label = UNIT_Procedure_CreateJumpLabel(procedure, return_name);
+    if (end_label == NULL) {
+        return _UNIT_FAIL;
+    }
+
     // When functions are inlined, when implement returns as locals.
     // There might be a more efficient way to do this.
     char return_local_name[64];
@@ -480,13 +487,6 @@ remap_offsets(UNIT_Procedure *procedure,
              "_inlined_%s_return_value", target->name);
     UNIT_Local return_local;
     if (UNIT_FAILED(UNIT_Procedure_CreateLocal(procedure, return_local_name, &return_local))) {
-        return _UNIT_FAIL;
-    }
-
-    char return_name[128];
-    snprintf(return_name, sizeof(return_name), "_inlined_%s_return", target->name);
-    UNIT_JumpLabel *end_label = UNIT_Procedure_CreateJumpLabel(procedure, return_name);
-    if (end_label == NULL) {
         return _UNIT_FAIL;
     }
 
@@ -527,7 +527,8 @@ remap_offsets(UNIT_Procedure *procedure,
             case _UNIT_OP_STORE_LOCAL_NAME:
             case _UNIT_OP_LOAD_LOCAL_NAME:
             case UNIT_OP_ADDRESS_OF: {
-                remapped->argument += local_offset;
+                // Skip past the argument and return value locals
+                remapped->argument += local_offset + nargs + 1;
                 break;
             }
 

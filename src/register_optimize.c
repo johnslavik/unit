@@ -13,7 +13,50 @@ compare_items(_UNIT_MachineItem *left, _UNIT_MachineItem *right)
         return 0;
     }
 
+    if (left->type == _UNIT_TYPE_CALL_ARGS) {
+        assert(right->type == _UNIT_TYPE_CALL_ARGS);
+        UNIT_Size size = _UNIT_Vector_SIZE(left->call_args);
+        if (size != _UNIT_Vector_SIZE(right->call_args)) {
+            return 0;
+        }
+
+        for (UNIT_Size index = 0; index < size; ++index) {
+            _UNIT_MachineItem *left_item = _UNIT_Vector_GET(left->call_args, index);
+            assert(left_item != NULL);
+            _UNIT_MachineItem *right_item = _UNIT_Vector_GET(right->call_args, index);
+            assert(right_item != NULL);
+            if (!compare_items(left_item, right_item)) {
+                return 0;
+            }
+        }
+
+        return 1;
+    }
+
     return left->value == right->value;
+}
+
+static int8_t
+item_matches_or_contains(_UNIT_MachineItem *haystack, _UNIT_MachineItem *needle)
+{
+    if (haystack == NULL || needle == NULL) {
+        return 0;
+    }
+
+    if (haystack->type == needle->type && haystack->value == needle->value) {
+        return 1;
+    }
+
+    if (haystack->type == _UNIT_TYPE_CALL_ARGS) {
+        UNIT_Size size = _UNIT_Vector_SIZE(haystack->call_args);
+        for (UNIT_Size index = 0; index < size; ++index) {
+            if (item_matches_or_contains(_UNIT_Vector_GET(haystack->call_args, index), needle)) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 static int8_t
@@ -52,9 +95,9 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block, UNIT_Size start,
         }
 
         _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointerNullable(operation->destination);
-        if (compare_items_nullable(destination, item)
-            || compare_items_nullable(operation->argument_1, item)
-            || compare_items_nullable(operation->argument_2, item)) {
+        if (item_matches_or_contains(destination, item)
+            || item_matches_or_contains(operation->argument_1, item)
+            || item_matches_or_contains(operation->argument_2, item)) {
             return 0;
         }
     }
