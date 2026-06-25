@@ -202,8 +202,16 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator,
     _UNIT_SizeSet_ITER(&block->liveness.alive_at_start, location);
         UNIT_Size register_id;
         if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments, location,
-                                           &register_id))) {
+                                        &register_id))) {
             _UNIT_SizeSet_Add(&registers_in_use, register_id);
+        } else {
+            for (UNIT_Size reg_id = 0; reg_id < allocator->num_registers; ++reg_id) {
+                if (!_UNIT_SizeSet_Contains(&registers_in_use, reg_id)) {
+                    _UNIT_SizeMap_Set(assignments, location, reg_id);
+                    _UNIT_SizeSet_Add(&registers_in_use, reg_id);
+                    break;
+                }
+            }
         }
     _UNIT_SizeSet_END_ITER();
 
