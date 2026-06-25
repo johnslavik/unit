@@ -136,16 +136,16 @@ optimize_block_moves(_UNIT_BasicBlock *block)
             CONTINUE_AND_DISCARD(op);
         }
 
-        /* Backward coalescing:
-           If the previous instruction produced src, and src is dead
-           after this MOVE, change the previous instruction's destination
-           to dst and delete the MOVE.
-
-           register_0 = ADD(register_1, 1)
-           register_2 = MOVE(register_0)     ← register_0 dead after
-           →
-           register_2 = ADD(register_1, 1)   ← destination changed
-        */
+        // If the previous instruction produced src, and src is dead after this move,
+        // change the previous instruction's destination and delete the move.
+        //
+        // For example:
+        // register_0 = ADD(register_1, 1)
+        // register_2 = MOVE(register_0)
+        //
+        // can be turned into
+        //
+        // register_2 = ADD(register_1, 1)
         int8_t source_never_used = item_dead_in_block(block, index + 1, size, source);
         if (source_never_used == -1) {
             return _UNIT_FAIL;
@@ -168,13 +168,14 @@ optimize_block_moves(_UNIT_BasicBlock *block)
             continue;
         }
 
-        if (_UNIT_MachineDestination_GetPointerNullable(previous->destination) != destination) {
+        _UNIT_MachineItem *previous_dest = _UNIT_MachineDestination_GetPointerNullable(previous->destination);
+        if (!compare_items_nullable(previous_dest, source)) {
             APPEND(op);
             continue;
         }
 
         assert(!_UNIT_MachineDestination_IsInput(previous->destination));
-        previous->destination = _UNIT_MachineDestination_FromDestination(source);
+        previous->destination = _UNIT_MachineDestination_FromDestination(destination);
         CONTINUE_AND_DISCARD(op);
     }
 
