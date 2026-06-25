@@ -64,6 +64,8 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         return NULL;
     }
 
+    _UNIT_Translation_Optimize(&compiled_procedure->_translation);
+
     if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context, context,
                                               procedure, &compiled_procedure->_translation))) {
         _UNIT_Translation_Clear(&compiled_procedure->_translation);

@@ -160,6 +160,9 @@ void
 _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation, const char *name,
                                     FILE *stream);
 
+UNIT_Status
+_UNIT_Translation_Optimize(_UNIT_Translation *translation);
+
 #ifdef __cplusplus
 }
 #endif
