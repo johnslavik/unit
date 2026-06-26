@@ -173,6 +173,39 @@ static PyType_Spec ExecutableBufferType_spec = {
     .slots = ExecutableBufferType_slots,
 };
 
+static PyObject *
+tmpfile_stream_to_text(FILE *stream)
+{
+    long size = ftell(stream);
+    if (size < 0) {
+        fclose(stream);
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    rewind(stream);
+
+    char *buffer = PyMem_Malloc(size);
+    if (buffer == NULL) {
+        fclose(stream);
+        return PyErr_NoMemory();
+    }
+
+    size_t read = fread(buffer, 1, size, stream);
+    if (read != (size_t)size) {
+        PyMem_Free(buffer);
+        fclose(stream);
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    fclose(stream);
+
+    PyObject *result = PyUnicode_FromStringAndSize(buffer, size);
+    PyMem_Free(buffer);
+    return result;
+}
+
 typedef struct {
     PyObject_HEAD
     UNIT_CompiledProcedure *compiled_procedure;
@@ -238,6 +271,28 @@ CompiledProcedureObject_jit(PyObject *op, PyObject *unused)
                                                   buffer);
 }
 
+static PyObject *
+CompiledProcedureObject_print_translation(PyObject *op, PyObject *unused)
+{
+    assert(op != NULL);
+    CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
+
+    FILE *stream = tmpfile();
+    if (stream == NULL) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    if (UNIT_FAILED(UNIT_CompiledProcedure_PrintTranslatedIR(self->compiled_procedure,
+                                                             stream))) {
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->compiled_procedure->context);
+        return NULL;
+    }
+
+    return tmpfile_stream_to_text(stream);
+}
+
 static int
 CompiledProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
 {
@@ -261,6 +316,7 @@ CompiledProcedureObject_dealloc(PyObject *op)
 static PyMethodDef CompiledProcedureObject_methods[] = {
     {"write_object_file", CompiledProcedureObject_write_object_file, METH_VARARGS, NULL},
     {"jit", CompiledProcedureObject_jit, METH_NOARGS, NULL},
+    {"print_translation", CompiledProcedureObject_print_translation, METH_NOARGS, NULL},
     {NULL},
 };
 
@@ -581,6 +637,33 @@ ProcedureObject_set_flags(PyObject *op, PyObject *value)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+ProcedureObject_print_instructions(PyObject *op, PyObject *arg)
+{
+    assert(op != NULL);
+    assert(arg != NULL);
+    ProcedureObject *self = ProcedureObject_CAST(op);
+
+    int8_t visualize_stack_effect = PyLong_AsInt(arg);
+    if (visualize_stack_effect == -1) {
+        return NULL;
+    }
+
+    FILE *stream = tmpfile();
+    if (stream == NULL) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure, stream, visualize_stack_effect))) {
+        fclose(stream);
+        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        return NULL;
+    }
+
+    return tmpfile_stream_to_text(stream);
+}
+
 static int
 ProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
 {
@@ -621,6 +704,7 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"compile", ProcedureObject_compile, METH_O, NULL},
     {"optimize", ProcedureObject_optimize, METH_NOARGS, NULL},
     {"set_flags", ProcedureObject_set_flags, METH_O, NULL},
+    {"print_instructions", ProcedureObject_print_instructions, METH_O, NULL},
     {NULL},
 };
 

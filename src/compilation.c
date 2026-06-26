@@ -446,11 +446,12 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
     _UNIT_Unreachable();
 }
 
-void
+UNIT_Status
 UNIT_CompiledProcedure_PrintTranslatedIR(const UNIT_CompiledProcedure *compiled,
                                          FILE *stream)
 {
     assert(compiled != NULL);
     assert(stream != NULL);
-    _UNIT_Translation_PrintInstructions(&compiled->_translation, compiled->name, stream);
+    return _UNIT_Translation_PrintInstructions(&compiled->_translation,
+                                               compiled->name, stream);
 }

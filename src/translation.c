@@ -134,66 +134,90 @@ emit_machine_instruction(UNIT_Context *context,
     return _UNIT_OK;
 }
 
-void
-print_machine_item(FILE *stream, _UNIT_MachineItem *item)
+
+UNIT_Status
+print_machine_item(FILE *stream, _UNIT_MachineItem *item, UNIT_Context *context)
 {
+#define PRINT(...)                                                          \
+    if (fprintf(stream, __VA_ARGS__) < 0) {                                 \
+        _UNIT_SetOSError(context, "printing machine item");                 \
+        return _UNIT_FAIL;                                                  \
+    }
+
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        fprintf(stream, "%ld", item->value);
+        PRINT("%ld", item->value);
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        fprintf(stream, "location_%ld", item->value);
+        PRINT("location_%ld", item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
-        fprintf(stream, "[");
+        PRINT("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
         for (UNIT_Size index = 0; index < size; ++index) {
             _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(item->call_args, index);
             assert(arg_item != NULL);
-            print_machine_item(stream, arg_item);
+            if (UNIT_FAILED(print_machine_item(stream, arg_item, context))) {
+                return _UNIT_FAIL;
+            }
+
             if (index + 1 != size) {
-                fprintf(stream, ", ");
+                PRINT(", ");
             }
         }
-        fprintf(stream, "]");
+        PRINT("]");
     } else if (item->type == _UNIT_TYPE_COMPARISON) {
-        print_machine_item(stream, item->comparison.left);
+        if (UNIT_FAILED(print_machine_item(stream, item->comparison.left, context))) {
+            return _UNIT_FAIL;
+        }
         switch (item->comparison.type) {
             case UNIT_OP_COMPARE_EQUAL:
-                fprintf(stream, " == ");
+                PRINT(" == ");
                 break;
             case UNIT_OP_COMPARE_NOT_EQUAL:
-                fprintf(stream, " != ");
+                PRINT(" != ");
                 break;
             case UNIT_OP_COMPARE_LESS:
-                fprintf(stream, " < ");
+                PRINT(" < ");
                 break;
             case UNIT_OP_COMPARE_LESS_EQUAL:
-                fprintf(stream, " <= ");
+                PRINT(" <= ");
                 break;
             case UNIT_OP_COMPARE_GREATER:
-                fprintf(stream, " > ");
+                PRINT(" > ");
                 break;
             case UNIT_OP_COMPARE_GREATER_EQUAL:
-                fprintf(stream, " >= ");
+                PRINT(" >= ");
                 break;
             default:
                 _UNIT_Unreachable();
         }
-        print_machine_item(stream, item->comparison.right);
+        if (UNIT_FAILED(print_machine_item(stream, item->comparison.right, context))) {
+            return _UNIT_FAIL;
+        }
     } else if (item->type == _UNIT_TYPE_MEMORY) {
-        fprintf(stream, "stack_slot_%ld", item->value);
+        PRINT("stack_slot_%ld", item->value);
     } else {
         assert(item->type == _UNIT_TYPE_REGISTER);
-        fprintf(stream, "register_%ld", item->value);
+        PRINT("register_%ld", item->value);
     }
 
     if (item->hint != NULL) {
-        fprintf(stream, " (%s)", item->hint);
+        PRINT(" (%s)", item->hint);
     }
+
+#undef PRINT
+
+    return _UNIT_OK;
 }
 
-static void
+static UNIT_Status
 print_instruction_stream(FILE *stream, _UNIT_Vector *instructions)
 {
+#define PRINT(...)                                                                  \
+    if (fprintf(stream, __VA_ARGS__) < 0) {                                         \
+        _UNIT_SetOSError(instructions->context, "printing instruction stream");     \
+        return _UNIT_FAIL;                                                          \
+    }
+
     assert(instructions != NULL);
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
@@ -203,64 +227,90 @@ print_instruction_stream(FILE *stream, _UNIT_Vector *instructions)
         if (operation->instruction == _UNIT_I_JUMP_LABEL) {
             // There should be a "block ..." right before this
             _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointer(operation->destination);
-            fprintf(stream, ", label %s (%ld):\n", destination->hint,
-                    destination->value);
+            PRINT(", label %s (%ld):\n", destination->hint, destination->value);
             continue;
         }
         assert(operation != NULL);
-        fprintf(stream, "        ");
+        PRINT("        ");
         _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointerNullable(operation->destination);
         int8_t is_input = _UNIT_MachineDestination_IsInput(operation->destination);
         if (destination != NULL && !is_input) {
-            print_machine_item(stream, destination);
-            fprintf(stream, " = ");
+            if (UNIT_FAILED(print_machine_item(stream, destination,
+                                               instructions->context))) {
+                return _UNIT_FAIL;
+            }
+            PRINT(" = ");
         }
 
-        fprintf(stream, "%s(", machine_instruction_name(operation->instruction));
+        PRINT("%s(", machine_instruction_name(operation->instruction));
         if (destination != NULL && is_input) {
             // There's no reason to use the destination as an input if one of
             // the other two arguments are free.
             assert(operation->argument_1 != NULL);
             assert(operation->argument_2 != NULL);
-            print_machine_item(stream, destination);
-            fprintf(stream, ", ");
+            if (UNIT_FAILED(print_machine_item(stream, destination,
+                                               instructions->context))) {
+                return _UNIT_FAIL;
+            }
+            PRINT(", ");
         }
         if (operation->argument_1 != NULL) {
-            print_machine_item(stream, operation->argument_1);
+            if (UNIT_FAILED(print_machine_item(stream, operation->argument_1,
+                                               instructions->context))) {
+                return _UNIT_FAIL;
+            }
         }
 
         if (operation->argument_2 != NULL) {
             assert(operation->argument_1 != NULL || !_UNIT_MachineDestination_IsNull(operation->destination));
-            fprintf(stream, ", ");
-            print_machine_item(stream, operation->argument_2);
+            PRINT(", ");
+            if (UNIT_FAILED(print_machine_item(stream, operation->argument_2,
+                                               instructions->context))) {
+                return _UNIT_FAIL;
+            }
         }
-        fprintf(stream, ")\n");
+        PRINT(")\n");
     }
+#undef PRINT
+
+    return _UNIT_OK;
 }
 
-void
+UNIT_Status
 _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
                                     const char *name,
                                     FILE *stream)
 {
+#define PRINT(...)                                                          \
+    if (fprintf(stream, __VA_ARGS__) < 0) {                                 \
+        _UNIT_SetOSError(translation->context, "printing translation");     \
+        return _UNIT_FAIL;                                                  \
+    }
+
     assert(translation != NULL);
     assert(name != NULL);
-    fprintf(stream, "translation for \"%s\":\n", name);
+
+    PRINT("translation for \"%s\":\n", name);
     UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
         assert(block != NULL);
-        fprintf(stream, "    block %ld", block->id);
+        PRINT("    block %ld", block->id);
         if (block->label_id != _UNIT_BasicBlock_NO_LABEL) {
             // We don't have access to the label name here, but the
             // instructions do. The jump label will be the first instruction
             // and will print out the name for us, so we don't want to print
             // a newline.
         } else {
-            fprintf(stream, "\n");
+            PRINT("\n");
         }
-        print_instruction_stream(stream, &block->instructions);
+        if (UNIT_FAILED(print_instruction_stream(stream, &block->instructions))) {
+            return _UNIT_FAIL;
+        }
     }
+
+#undef PRINT
+    return _UNIT_OK;
 }
 
 static inline void

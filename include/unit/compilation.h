@@ -35,7 +35,7 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
                                        const char *path,
                                        UNIT_ExecutableFormat format);
 
-void
+UNIT_Status
 UNIT_CompiledProcedure_PrintTranslatedIR(const UNIT_CompiledProcedure *compiled, FILE *stream);
 
 void

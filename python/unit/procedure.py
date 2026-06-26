@@ -1,7 +1,8 @@
+import sys
 from unit.context import Context
 from unit.opcode import OpCode
 from unit import _core
-from typing import Any, Literal, TypeAlias, TypeVar, Generic
+from typing import IO, Any, Literal, TypeAlias, TypeVar, Generic
 from dataclasses import dataclass
 import ctypes
 
@@ -77,6 +78,10 @@ class CompiledProcedure:
 
     def jit(self) -> ExecutableBuffer[Any, Any]:
         return ExecutableBuffer(self._compiled.jit())
+
+    def translation_text(self) -> str:
+        return self._compiled.print_translation()
+
 
 
 Architecture: TypeAlias = Literal["amd64", "aarch64"]
@@ -247,3 +252,6 @@ class Procedure:
 
     def optimize(self) -> None:
         self._procedure.optimize()
+
+    def instructions_text(self, *, visualize_stack_effect: bool = True) -> None:
+        return self._procedure.print_instructions(int(visualize_stack_effect))
