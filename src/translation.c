@@ -922,10 +922,25 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 block->id = _block_id++;
                 block->label_id = label->id;
 
-                if (UNIT_FAILED(handle_jump_snapshot(translation, &locals,
-                                                     &locals_snapshots, CURRENT_BLOCK(),
-                                                     label->id))) {
-                    goto error;
+                // Restore locals from forward-jump snapshot if one exists
+                int8_t found_snapshot = 0;
+                UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
+                for (UNIT_Size index = 0; index < snap_count; ++index) {
+                    LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
+                    if (snap->label_id != label->id) {
+                        continue;
+                    }
+                    found_snapshot = 1;
+                    LocalState *state = get_local(&locals, snap->local_index);
+                    if (state != NULL) {
+                        state->location_id = snap->location_id;
+                    }
+                }
+
+                if (!found_snapshot) {
+                    if (UNIT_FAILED(snapshot_locals(&locals, &locals_snapshots, label->id))) {
+                        goto error;
+                    }
                 }
 
                 // The jump label succeeds the current block because it fell
