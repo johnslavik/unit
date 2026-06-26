@@ -728,6 +728,10 @@ _unit_modexec(PyObject *module)
 
 #undef EXPORT_CONST
 
+    if (PyModule_AddStringConstant(module, "UNIT_VERSION_STRING", UNIT_VERSION_STRING)) {
+        return -1;
+    }
+
     return 0;
 }
 

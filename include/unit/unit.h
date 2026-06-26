@@ -12,6 +12,7 @@ extern "C" {
 #include <unit/executable_buffer.h>
 #include <unit/optimization.h>
 #include <unit/procedure.h>
+#include <unit/version.h>
 
 #ifdef __cplusplus
 }

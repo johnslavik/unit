@@ -8,6 +8,25 @@
 
 namespace unit {
 
+inline constexpr uint32_t version_hex = UNIT_VERSION_HEX;
+inline constexpr int version_major = UNIT_VERSION_MAJOR;
+inline constexpr int version_minor = UNIT_VERSION_MINOR;
+inline constexpr int version_patch = UNIT_VERSION_PATCH;
+inline constexpr int version_dev = UNIT_VERSION_DEV;
+inline constexpr const char *version_string = UNIT_VERSION_STRING;
+
+[[nodiscard]] inline constexpr uint32_t
+pack_version(int major, int minor, int patch)
+{
+    return UNIT_PACK_VERSION(major, minor, patch);
+}
+
+[[nodiscard]] inline constexpr uint32_t
+pack_version(int major, int minor, int patch, int dev)
+{
+    return UNIT_PACK_VERSION_FULL(major, minor, patch, dev);
+}
+
 enum class ErrorCode {
     NONE = UNIT_ERROR_NONE,
     NO_MEMORY = UNIT_ERROR_NO_MEMORY,
