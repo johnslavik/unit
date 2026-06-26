@@ -233,6 +233,7 @@ optimize_block_moves(_UNIT_BasicBlock *block)
 UNIT_Status
 _UNIT_Translation_Optimize(_UNIT_Translation *translation)
 {
+    return _UNIT_OK;
     assert(translation != NULL);
     UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
 

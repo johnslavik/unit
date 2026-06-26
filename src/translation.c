@@ -518,18 +518,33 @@ typedef struct {
     UNIT_Size location_id;
 } LocalSnapshot;
 
-typedef enum {
-    DEBUG_TYPE_INT,
-    DEBUG_TYPE_STRING,
-} DebugStackType;
+static UNIT_Status
+snapshot_locals(LocalVariables *locals, _UNIT_Vector *snapshots, UNIT_Size label_id)
+{
+    assert(locals != NULL);
+    assert(snapshots != NULL);
+    _UNIT_Map_ITER(&locals->locals_map, key, value);
+        assert(key != NULL);
+        assert(value != NULL);
+        int32_t local_index = *(int32_t *)key;
+        assert(local_index >= 0);
+        LocalState *state = (LocalState *)value;
+        LocalSnapshot *snapshot = _UNIT_Alloc(locals->context,
+                                              sizeof(LocalSnapshot));
+        if (snapshot == NULL) {
+            return _UNIT_FAIL;
+        }
 
-typedef struct {
-    DebugStackType type;
-    union {
-        int64_t value;
-        const char *string;
-    };
-} DebugStackItem;
+        snapshot->label_id = label_id;
+        snapshot->local_index = local_index;
+        snapshot->location_id = state->location_id;
+        if (UNIT_FAILED(_UNIT_Vector_Append(snapshots, snapshot))) {
+            return _UNIT_FAIL;
+        }
+    _UNIT_Map_END_ITER();
+
+    return _UNIT_OK;
+}
 
 UNIT_Status
 _UNIT_Translate(_UNIT_Translation *translation,
@@ -855,22 +870,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 block->id = _block_id++;
                 block->label_id = label->id;
 
-                _UNIT_Map_ITER(&locals.locals_map, key, value);
-                    int32_t local_index = *(int32_t *)key;
-                    LocalState *state = (LocalState *)value;
-                    LocalSnapshot *snapshot = _UNIT_Alloc(context,
-                                                          sizeof(LocalSnapshot));
-                    if (snapshot == NULL) {
-                        goto error;
-                    }
-
-                    snapshot->label_id = label->id;
-                    snapshot->local_index = local_index;
-                    snapshot->location_id = state->location_id;
-                    if (UNIT_FAILED(_UNIT_Vector_Append(&locals_snapshots, snapshot))) {
-                        goto error;
-                    }
-                _UNIT_Map_END_ITER();
+                if (UNIT_FAILED(snapshot_locals(&locals, &locals_snapshots, label->id))) {
+                    goto error;
+                }
 
                 // The jump label succeeds the current block because it fell
                 // through.
@@ -889,12 +891,15 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
 
+                // Check if a snapshot already exists for this label
+                int8_t found_snapshot = 0;
                 UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
                 for (UNIT_Size index = 0; index < snap_count; ++index) {
                     LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
                     if (snap->label_id != label->id) {
                         continue;
                     }
+                    found_snapshot = 1;
 
                     LocalState *current = get_local(&locals, snap->local_index);
                     if (current == NULL) {
@@ -916,6 +921,13 @@ _UNIT_Translate(_UNIT_Translation *translation,
                         goto error;
                     }
                     EMIT_DEST_ONE(_UNIT_I_MOVE, dest, location);
+                }
+
+                // First path to this label, so take a snapshot
+                if (!found_snapshot) {
+                    if (UNIT_FAILED(snapshot_locals(&locals, &locals_snapshots, label->id))) {
+                        goto error;
+                    }
                 }
 
                 EMIT_ONE(_UNIT_I_JUMP, item);
@@ -963,6 +975,21 @@ _UNIT_Translate(_UNIT_Translation *translation,
                         break;
                     default:
                         _UNIT_Unreachable();
+                }
+
+                UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
+                int8_t found_snapshot = 0;
+                for (UNIT_Size index = 0; index < snap_count; ++index) {
+                    LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
+                    if (snap->label_id == label->id) {
+                        found_snapshot = 1;
+                        break;
+                    }
+                }
+                if (!found_snapshot) {
+                    if (UNIT_FAILED(snapshot_locals(&locals, &locals_snapshots, label->id))) {
+                        goto error;
+                    }
                 }
 
                 EMIT_THREE(fused, jump_target,
