@@ -69,6 +69,11 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
                                             stdout);
     }
 
+    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
+                                                        &compiled_procedure->_compile_context, 8))) {
+        goto error;
+    }
+
     if (!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)) {
         if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation))) {
             _UNIT_Translation_Clear(&compiled_procedure->_translation);
@@ -82,11 +87,6 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         _UNIT_Translation_Clear(&compiled_procedure->_translation);
         _UNIT_Dealloc(context, compiled_procedure);
         return NULL;
-    }
-
-    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
-                                                        &compiled_procedure->_compile_context, 8))) {
-        goto error;
     }
 
     if (procedure->flags & UNIT_FLAG_PRINT_TRANSLATION_POSTOP) {
