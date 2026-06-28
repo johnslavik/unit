@@ -11,52 +11,61 @@
 
 #include "aarch64_local.h"
 
-static AARCH64_Operand
-a64_reg(AARCH64_Register r) {
-    return (AARCH64_Operand) {
+/* ── Operand constructors ───────────────────────────────────────────── */
+
+static AArch64_Operand
+a64_reg(AArch64_Register r)
+{
+    return (AArch64_Operand) {
         .kind = A64_OPERAND_REGISTER,
         .reg = r
     };
 }
 
-static AARCH64_Operand
-a64_imm(int64_t value) {
-    return (AARCH64_Operand) {
+static AArch64_Operand
+a64_imm(int64_t value)
+{
+    return (AArch64_Operand) {
         .kind = A64_OPERAND_IMMEDIATE,
         .immediate = value
     };
 }
 
-static AARCH64_Operand
-a64_stack(int64_t offset) {
-    return (AARCH64_Operand) {
+static AArch64_Operand
+a64_stack(int64_t offset)
+{
+    return (AArch64_Operand) {
         .kind = A64_OPERAND_STACK,
         .immediate = offset
     };
 }
 
-static AARCH64_Operand
-a64_indirect(AARCH64_Register r) {
-    return (AARCH64_Operand) {
+static AArch64_Operand
+a64_indirect(AArch64_Register r)
+{
+    return (AArch64_Operand) {
         .kind = A64_OPERAND_INDIRECT,
         .reg = r
     };
 }
 
-static AARCH64_Operand
-a64_cond(AARCH64_Condition c) {
-    return (AARCH64_Operand) {
+static AArch64_Operand
+a64_cond(AArch64_Condition c)
+{
+    return (AArch64_Operand) {
         .kind = A64_OPERAND_CONDITION,
         .condition = c
     };
 }
 
+/* ── Register mapping ───────────────────────────────────────────────── */
+
 /* Map virtual registers to physical registers.
- * We use X9-X15 and X19 for 8 virtual registers.
- * X9-X15 are caller-saved temporaries.
- * X19 is callee-saved so we save/restore it around calls.
- * X16, X17 are scratch (IP0, IP1). */
-static const AARCH64_Register register_map[] = {
+ * X9-X15: caller-saved temporaries (7 regs)
+ * X19-X28: callee-saved (10 regs, saved/restored around calls)
+ * X16, X17 are reserved as scratch (IP0, IP1).
+ * X18 is platform-reserved (off-limits on Apple). */
+static const AArch64_Register register_map[] = {
     REG_X9,
     REG_X10,
     REG_X11,
@@ -65,18 +74,33 @@ static const AARCH64_Register register_map[] = {
     REG_X14,
     REG_X15,
     REG_X19,
+    REG_X20,
+    REG_X21,
+    REG_X22,
+    REG_X23,
+    REG_X24,
+    REG_X25,
+    REG_X26,
+    REG_X27,
+    REG_X28,
 };
 
+#define NUM_VIRTUAL_REGISTERS \
+    ((UNIT_Size)(sizeof(register_map) / sizeof(register_map[0])))
+
 /* Argument registers for AArch64: X0-X7 for all ABIs */
-static const AARCH64_Register argument_registers[] = {
+static const AArch64_Register argument_registers[] = {
     REG_X0, REG_X1, REG_X2, REG_X3, REG_X4, REG_X5, REG_X6, REG_X7
 };
 
-static AARCH64_Operand
+/* ── Machine item to operand conversion ─────────────────────────────── */
+
+static AArch64_Operand
 machine_item_to_operand(const _UNIT_MachineItem *machine_item)
 {
     assert(machine_item != NULL);
     if (machine_item->type == _UNIT_TYPE_REGISTER) {
+        assert(machine_item->value < NUM_VIRTUAL_REGISTERS);
         return a64_reg(register_map[machine_item->value]);
     } else if (machine_item->type == _UNIT_TYPE_CONSTANT) {
         return a64_imm(machine_item->value);
@@ -84,7 +108,7 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
         printf("cannot use call args as operand\n");
         abort();
     } else {
-        /* Memory location => stack slot (offset from SP) */
+        assert(machine_item->type == _UNIT_TYPE_MEMORY);
         return a64_stack(machine_item->value * 8);
     }
 }
@@ -102,166 +126,230 @@ generic_item_passthrough(_UNIT_MachineItem *item)
              _UNIT_MachineDestination: _UNIT_MachineDestination_GetPointerNullable      \
             )(item)
 
-/* Helper macros for creating instructions */
-#define MAKE_INST_0(opcode_val) \
-    make_instruction_0(compile_context->context, opcode_val)
+/* ── Per-opcode instruction builders (AMD64-style) ──────────────────── */
 
-#define MAKE_INST_1(opcode_val, a) \
-    make_instruction_1(compile_context->context, opcode_val, a)
+#define NO_ARGS_HELPER(name, opcode_name)                                               \
+    static inline AArch64_Instruction *                                                 \
+    name(UNIT_Context *context) {                                                       \
+        assert(context != NULL);                                                        \
+        AArch64_Instruction *instruction = _UNIT_Alloc(context,                         \
+                                                       sizeof(AArch64_Instruction));    \
+        if (instruction == NULL) {                                                      \
+            return NULL;                                                                \
+        }                                                                               \
+        instruction->opcode = opcode_name;                                              \
+        instruction->operand_count = 0;                                                 \
+        return instruction;                                                             \
+    }
 
-#define MAKE_INST_2(opcode_val, a, b) \
-    make_instruction_2(compile_context->context, opcode_val, a, b)
+#define ONE_ARG_HELPER(name, opcode_name)                                               \
+    static inline AArch64_Instruction *                                                 \
+    name(UNIT_Context *context, AArch64_Operand a) {                                    \
+        assert(context != NULL);                                                        \
+        AArch64_Instruction *instruction = _UNIT_Alloc(context,                         \
+                                                       sizeof(AArch64_Instruction));    \
+        if (instruction == NULL) {                                                      \
+            return NULL;                                                                \
+        }                                                                               \
+        instruction->opcode = opcode_name;                                              \
+        instruction->operands[0] = a;                                                   \
+        instruction->operand_count = 1;                                                 \
+        return instruction;                                                             \
+    }
 
-#define MAKE_INST_3(opcode_val, a, b, c) \
-    make_instruction_3(compile_context->context, opcode_val, a, b, c)
+#define TWO_ARG_HELPER(name, opcode_name)                                               \
+    static inline AArch64_Instruction *                                                 \
+    name(UNIT_Context *context, AArch64_Operand a, AArch64_Operand b) {                 \
+        assert(context != NULL);                                                        \
+        AArch64_Instruction *instruction = _UNIT_Alloc(context,                         \
+                                                       sizeof(AArch64_Instruction));    \
+        if (instruction == NULL) {                                                      \
+            return NULL;                                                                \
+        }                                                                               \
+        instruction->opcode = opcode_name;                                              \
+        instruction->operands[0] = a;                                                   \
+        instruction->operands[1] = b;                                                   \
+        instruction->operand_count = 2;                                                 \
+        return instruction;                                                             \
+    }
 
-#define MAKE_INST_4(opcode_val, a, b, c, d) \
-    make_instruction_4(compile_context->context, opcode_val, a, b, c, d)
+#define THREE_ARG_HELPER(name, opcode_name)                                             \
+    static inline AArch64_Instruction *                                                 \
+    name(UNIT_Context *context, AArch64_Operand a, AArch64_Operand b,                   \
+         AArch64_Operand c) {                                                           \
+        assert(context != NULL);                                                        \
+        AArch64_Instruction *instruction = _UNIT_Alloc(context,                         \
+                                                       sizeof(AArch64_Instruction));    \
+        if (instruction == NULL) {                                                      \
+            return NULL;                                                                \
+        }                                                                               \
+        instruction->opcode = opcode_name;                                              \
+        instruction->operands[0] = a;                                                   \
+        instruction->operands[1] = b;                                                   \
+        instruction->operands[2] = c;                                                   \
+        instruction->operand_count = 3;                                                 \
+        return instruction;                                                             \
+    }
 
-static AARCH64_Instruction *
-make_instruction_0(UNIT_Context *ctx, AARCH64_Opcode opcode)
-{
-    AARCH64_Instruction *inst = _UNIT_Alloc(ctx, sizeof(AARCH64_Instruction));
-    if (inst == NULL) return NULL;
-    inst->opcode = opcode;
-    inst->operand_count = 0;
-    return inst;
-}
+#define FOUR_ARG_HELPER(name, opcode_name)                                              \
+    static inline AArch64_Instruction *                                                 \
+    name(UNIT_Context *context, AArch64_Operand a, AArch64_Operand b,                   \
+         AArch64_Operand c, AArch64_Operand d) {                                        \
+        assert(context != NULL);                                                        \
+        AArch64_Instruction *instruction = _UNIT_Alloc(context,                         \
+                                                       sizeof(AArch64_Instruction));    \
+        if (instruction == NULL) {                                                      \
+            return NULL;                                                                \
+        }                                                                               \
+        instruction->opcode = opcode_name;                                              \
+        instruction->operands[0] = a;                                                   \
+        instruction->operands[1] = b;                                                   \
+        instruction->operands[2] = c;                                                   \
+        instruction->operands[3] = d;                                                   \
+        instruction->operand_count = 4;                                                 \
+        return instruction;                                                             \
+    }
 
-static AARCH64_Instruction *
-make_instruction_1(UNIT_Context *ctx, AARCH64_Opcode opcode, AARCH64_Operand a)
-{
-    AARCH64_Instruction *inst = _UNIT_Alloc(ctx, sizeof(AARCH64_Instruction));
-    if (inst == NULL) return NULL;
-    inst->opcode = opcode;
-    inst->operands[0] = a;
-    inst->operand_count = 1;
-    return inst;
-}
+/* Moves */
+TWO_ARG_HELPER(a64_mov_reg, AArch64_MOV_REG)
+TWO_ARG_HELPER(a64_mov_imm16, AArch64_MOV_IMM)
+TWO_ARG_HELPER(a64_mov_wide, AArch64_MOV_WIDE)
 
-static AARCH64_Instruction *
-make_instruction_2(UNIT_Context *ctx, AARCH64_Opcode opcode,
-                   AARCH64_Operand a, AARCH64_Operand b)
-{
-    AARCH64_Instruction *inst = _UNIT_Alloc(ctx, sizeof(AARCH64_Instruction));
-    if (inst == NULL) return NULL;
-    inst->opcode = opcode;
-    inst->operands[0] = a;
-    inst->operands[1] = b;
-    inst->operand_count = 2;
-    return inst;
-}
+/* Loads/Stores */
+TWO_ARG_HELPER(a64_ldr, AArch64_LDR)
+TWO_ARG_HELPER(a64_str, AArch64_STR)
+TWO_ARG_HELPER(a64_ldrb, AArch64_LDRB)
+TWO_ARG_HELPER(a64_ldrh, AArch64_LDRH)
+TWO_ARG_HELPER(a64_ldrw, AArch64_LDRW)
+TWO_ARG_HELPER(a64_strb, AArch64_STRB)
+TWO_ARG_HELPER(a64_strh, AArch64_STRH)
+TWO_ARG_HELPER(a64_strw, AArch64_STRW)
+TWO_ARG_HELPER(a64_ldrsb, AArch64_LDRSB)
+TWO_ARG_HELPER(a64_ldrsh, AArch64_LDRSH)
+TWO_ARG_HELPER(a64_ldrsw, AArch64_LDRSW)
 
-static AARCH64_Instruction *
-make_instruction_3(UNIT_Context *ctx, AARCH64_Opcode opcode,
-                   AARCH64_Operand a, AARCH64_Operand b, AARCH64_Operand c)
-{
-    AARCH64_Instruction *inst = _UNIT_Alloc(ctx, sizeof(AARCH64_Instruction));
-    if (inst == NULL) return NULL;
-    inst->opcode = opcode;
-    inst->operands[0] = a;
-    inst->operands[1] = b;
-    inst->operands[2] = c;
-    inst->operand_count = 3;
-    return inst;
-}
+/* Calls */
+ONE_ARG_HELPER(a64_bl_symbol, AArch64_BL_SYMBOL)
+ONE_ARG_HELPER(a64_blr, AArch64_BLR)
 
-static AARCH64_Instruction *
-make_instruction_4(UNIT_Context *ctx, AARCH64_Opcode opcode,
-                   AARCH64_Operand a, AARCH64_Operand b,
-                   AARCH64_Operand c, AARCH64_Operand d)
-{
-    AARCH64_Instruction *inst = _UNIT_Alloc(ctx, sizeof(AARCH64_Instruction));
-    if (inst == NULL) return NULL;
-    inst->opcode = opcode;
-    inst->operands[0] = a;
-    inst->operands[1] = b;
-    inst->operands[2] = c;
-    inst->operands[3] = d;
-    inst->operand_count = 4;
-    return inst;
-}
+/* Branches */
+ONE_ARG_HELPER(a64_b, AArch64_B)
+TWO_ARG_HELPER(a64_b_cond, AArch64_B_COND)
+ONE_ARG_HELPER(a64_b_label, AArch64_B_LABEL)
+
+/* Comparisons (encoder auto-selects reg/imm form) */
+TWO_ARG_HELPER(a64_cmp, AArch64_CMP)
+
+/* Arithmetic (encoder auto-selects reg/imm form for ADD/SUB) */
+THREE_ARG_HELPER(a64_add, AArch64_ADD)
+THREE_ARG_HELPER(a64_sub, AArch64_SUB)
+THREE_ARG_HELPER(a64_mul, AArch64_MUL)
+THREE_ARG_HELPER(a64_sdiv, AArch64_SDIV)
+FOUR_ARG_HELPER(a64_msub, AArch64_MSUB)
+
+/* Misc */
+TWO_ARG_HELPER(a64_load_string, AArch64_LOAD_STRING)
+NO_ARGS_HELPER(a64_ret, AArch64_RET)
+ONE_ARG_HELPER(a64_svc, AArch64_SVC)
+TWO_ARG_HELPER(a64_add_sp_imm, AArch64_ADD_SP_IMM)
+
+/* Extension */
+TWO_ARG_HELPER(a64_uxtb, AArch64_UXTB)
+TWO_ARG_HELPER(a64_uxth, AArch64_UXTH)
+TWO_ARG_HELPER(a64_uxtw, AArch64_UXTW)
+TWO_ARG_HELPER(a64_sxtb, AArch64_SXTB)
+TWO_ARG_HELPER(a64_sxth, AArch64_SXTH)
+TWO_ARG_HELPER(a64_sxtw, AArch64_SXTW)
+
+/* ── EMIT macro ─────────────────────────────────────────────────────── */
 
 #define EMIT(op)                                                             \
-    if (UNIT_FAILED(AARCH64_encode_instruction(compile_context, op))) {      \
+    if (UNIT_FAILED(AArch64_encode_instruction(compile_context, op))) {      \
         return _UNIT_FAIL;                                                   \
     }
 
-/* Load a value from a stack slot into a register */
+/* ── Stack load/store helpers ───────────────────────────────────────── */
+
 static UNIT_Status
-emit_load_stack(_UNIT_CompileContext *compile_context, AARCH64_Register dest,
+emit_load_stack(_UNIT_CompileContext *compile_context, AArch64_Register dest,
                 UNIT_Size stack_offset)
 {
-    /* ldr Xd, [sp, #offset] */
-    EMIT(MAKE_INST_2(AARCH64_LDR, a64_reg(dest), a64_stack(stack_offset)));
+    assert(compile_context != NULL);
+    EMIT(a64_ldr(compile_context->context, a64_reg(dest),
+                 a64_stack(stack_offset)));
     return _UNIT_OK;
 }
 
-/* Store a register value to a stack slot */
 static UNIT_Status
-emit_store_stack(_UNIT_CompileContext *compile_context, AARCH64_Register src,
+emit_store_stack(_UNIT_CompileContext *compile_context, AArch64_Register src,
                  UNIT_Size stack_offset)
 {
-    /* str Xs, [sp, #offset] */
-    EMIT(MAKE_INST_2(AARCH64_STR, a64_reg(src), a64_stack(stack_offset)));
+    assert(compile_context != NULL);
+    EMIT(a64_str(compile_context->context, a64_reg(src),
+                 a64_stack(stack_offset)));
     return _UNIT_OK;
 }
 
-/* Load an immediate value into a register, choosing the best encoding */
+/* Load an immediate value into a register, choosing the best encoding. */
 static UNIT_Status
-emit_mov_imm(_UNIT_CompileContext *compile_context, AARCH64_Register dest,
+emit_mov_imm(_UNIT_CompileContext *compile_context, AArch64_Register dest,
              int64_t value)
 {
+    assert(compile_context != NULL);
     uint64_t uval = (uint64_t)value;
     if (uval <= 0xFFFF) {
-        EMIT(MAKE_INST_2(AARCH64_MOV_IMM, a64_reg(dest), a64_imm(value)));
+        EMIT(a64_mov_imm16(compile_context->context, a64_reg(dest),
+                           a64_imm(value)));
     } else {
-        EMIT(MAKE_INST_2(AARCH64_MOV_WIDE, a64_reg(dest), a64_imm(value)));
+        EMIT(a64_mov_wide(compile_context->context, a64_reg(dest),
+                          a64_imm(value)));
     }
     return _UNIT_OK;
 }
 
-/* Ensure an operand is in a register. If it's a stack slot or immediate,
- * load it into the scratch register (X16). Returns the register it's in. */
-static UNIT_Status
-ensure_in_register(_UNIT_CompileContext *compile_context,
-                   AARCH64_Operand operand, AARCH64_Register scratch,
-                   AARCH64_Register *out_reg)
-{
-    if (operand.kind == A64_OPERAND_REGISTER) {
-        *out_reg = operand.reg;
-        return _UNIT_OK;
-    } else if (operand.kind == A64_OPERAND_STACK) {
-        if (UNIT_FAILED(emit_load_stack(compile_context, scratch,
-                                        (UNIT_Size)operand.immediate))) {
-            return _UNIT_FAIL;
-        }
-        *out_reg = scratch;
-        return _UNIT_OK;
-    } else if (operand.kind == A64_OPERAND_IMMEDIATE) {
-        if (UNIT_FAILED(emit_mov_imm(compile_context, scratch,
-                                     operand.immediate))) {
-            return _UNIT_FAIL;
-        }
-        *out_reg = scratch;
-        return _UNIT_OK;
-    }
-    _UNIT_Unreachable();
-    return _UNIT_FAIL;
-}
+/* ── ENSURE_IN_REGISTER / WRITEBACK_IF_STACK macros ─────────────────── */
 
-/* Write a register value back to the original operand location
- * if it was a stack slot */
-static UNIT_Status
-writeback_if_stack(_UNIT_CompileContext *compile_context,
-                   AARCH64_Operand original, AARCH64_Register current_reg)
-{
-    if (original.kind == A64_OPERAND_STACK) {
-        return emit_store_stack(compile_context, current_reg,
-                                (UNIT_Size)original.immediate);
-    }
-    return _UNIT_OK;
-}
+/* Ensure an operand is in a register.  If it is already a register operand,
+ * `out_name` is set to that register.  Otherwise the value is loaded into
+ * `scratch` and `out_name` is set to `scratch`.
+ * Evaluates to an early-return on failure. */
+#define ENSURE_IN_REGISTER(operand, scratch, out_name)                       \
+    AArch64_Register out_name;                                               \
+    do {                                                                     \
+        AArch64_Operand _eir_op = (operand);                                 \
+        if (_eir_op.kind == A64_OPERAND_REGISTER) {                          \
+            out_name = _eir_op.reg;                                          \
+        } else if (_eir_op.kind == A64_OPERAND_STACK) {                      \
+            if (UNIT_FAILED(emit_load_stack(compile_context, (scratch),       \
+                                           (UNIT_Size)_eir_op.immediate))) { \
+                return _UNIT_FAIL;                                           \
+            }                                                                \
+            out_name = (scratch);                                            \
+        } else if (_eir_op.kind == A64_OPERAND_IMMEDIATE) {                  \
+            if (UNIT_FAILED(emit_mov_imm(compile_context, (scratch),          \
+                                         _eir_op.immediate))) {              \
+                return _UNIT_FAIL;                                           \
+            }                                                                \
+            out_name = (scratch);                                            \
+        } else {                                                             \
+            _UNIT_Unreachable();                                             \
+        }                                                                    \
+    } while (0)
+
+/* Write a register value back to the original operand location if it was
+ * a stack slot.  No-op for register operands. */
+#define WRITEBACK_IF_STACK(original, current_reg)                             \
+    do {                                                                      \
+        AArch64_Operand _wb_op = (original);                                  \
+        if (_wb_op.kind == A64_OPERAND_STACK) {                               \
+            if (UNIT_FAILED(emit_store_stack(compile_context, (current_reg),   \
+                                            (UNIT_Size)_wb_op.immediate))) {  \
+                return _UNIT_FAIL;                                            \
+            }                                                                 \
+        }                                                                     \
+    } while (0)
+
+/* ── Lowering ───────────────────────────────────────────────────────── */
 
 static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
@@ -272,24 +360,22 @@ translate_operation(_UNIT_CompileContext *compile_context,
     assert(compile_context != NULL);
     assert(operation != NULL);
     assert(epilogue_patches != NULL);
+    UNIT_Context *ctx = compile_context->context;
+    assert(ctx != NULL);
 
 #define OP(value) machine_item_to_operand(ENSURE_VALID_ITEM(operation->value))
 
     switch (operation->instruction) {
 
         case _UNIT_I_MOVE: {
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Operand src = OP(argument_1);
+            AArch64_Operand dst = OP(destination);
+            AArch64_Operand src = OP(argument_1);
 
-            AARCH64_Register src_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, src, REG_X16,
-                                               &src_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(src, REG_X16, src_reg);
 
             if (dst.kind == A64_OPERAND_REGISTER) {
                 if (dst.reg != src_reg) {
-                    EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(dst.reg),
+                    EMIT(a64_mov_reg(ctx, a64_reg(dst.reg),
                                      a64_reg(src_reg)));
                 }
             } else if (dst.kind == A64_OPERAND_STACK) {
@@ -304,17 +390,18 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_CALL_SYMBOL: {
+            assert(operation->argument_2 != NULL);
             assert(operation->argument_2->type == _UNIT_TYPE_CALL_ARGS);
             _UNIT_Vector *arguments = operation->argument_2->call_args;
+            assert(arguments != NULL);
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
             assert(num_arguments <= 8);
 
-            /* Save all virtual registers to stack slots before the call,
-             * since X9-X15 are caller-saved. X19 is callee-saved. */
-            UNIT_Size save_slots[8];
-            AARCH64_Operand dst_op = OP(destination);
-            for (UNIT_Size i = 0; i < 8; ++i) {
-                AARCH64_Register saved_reg = register_map[i];
+            /* Save all virtual registers to stack slots before the call. */
+            UNIT_Size save_slots[NUM_VIRTUAL_REGISTERS];
+            AArch64_Operand dst_op = OP(destination);
+            for (UNIT_Size i = 0; i < NUM_VIRTUAL_REGISTERS; ++i) {
+                AArch64_Register saved_reg = register_map[i];
                 /* Don't save our own destination register */
                 if (dst_op.kind == A64_OPERAND_REGISTER
                     && saved_reg == dst_op.reg) {
@@ -332,14 +419,15 @@ translate_operation(_UNIT_CompileContext *compile_context,
             /* Move arguments into X0-X7, loading from save slots to
              * avoid circular dependency issues. */
             for (UNIT_Size arg = 0; arg < num_arguments; ++arg) {
-                AARCH64_Register arg_reg = argument_registers[arg];
+                AArch64_Register arg_reg = argument_registers[arg];
                 _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(arguments, arg);
-                AARCH64_Operand value = machine_item_to_operand(arg_item);
+                assert(arg_item != NULL);
+                AArch64_Operand value = machine_item_to_operand(arg_item);
 
                 /* If the value is in a virtual register that we saved,
                  * load from the save slot instead to avoid clobbered values. */
                 if (value.kind == A64_OPERAND_REGISTER) {
-                    for (UNIT_Size i = 0; i < 8; ++i) {
+                    for (UNIT_Size i = 0; i < NUM_VIRTUAL_REGISTERS; ++i) {
                         if (save_slots[i] != (UNIT_Size)-1
                             && register_map[i] == value.reg) {
                             value = a64_stack(save_slots[i]);
@@ -348,24 +436,20 @@ translate_operation(_UNIT_CompileContext *compile_context,
                     }
                 }
 
-                AARCH64_Register src_reg;
-                if (UNIT_FAILED(ensure_in_register(compile_context, value,
-                                                   REG_X16, &src_reg))) {
-                    return _UNIT_FAIL;
-                }
+                ENSURE_IN_REGISTER(value, REG_X16, src_reg);
                 if (arg_reg != src_reg) {
-                    EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(arg_reg),
+                    EMIT(a64_mov_reg(ctx, a64_reg(arg_reg),
                                      a64_reg(src_reg)));
                 }
             }
 
             /* bl <symbol> */
-            EMIT(MAKE_INST_1(AARCH64_BL_SYMBOL, OP(argument_1)));
+            EMIT(a64_bl_symbol(ctx, OP(argument_1)));
 
             /* Move result from X0 to destination */
             if (dst_op.kind == A64_OPERAND_REGISTER) {
                 if (dst_op.reg != REG_X0) {
-                    EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(dst_op.reg),
+                    EMIT(a64_mov_reg(ctx, a64_reg(dst_op.reg),
                                      a64_reg(REG_X0)));
                 }
             } else if (dst_op.kind == A64_OPERAND_STACK) {
@@ -376,9 +460,11 @@ translate_operation(_UNIT_CompileContext *compile_context,
             }
 
             /* Restore saved registers */
-            for (UNIT_Size i = 0; i < 8; ++i) {
-                if (save_slots[i] == (UNIT_Size)-1) continue;
-                AARCH64_Register saved_reg = register_map[i];
+            for (UNIT_Size i = 0; i < NUM_VIRTUAL_REGISTERS; ++i) {
+                if (save_slots[i] == (UNIT_Size)-1) {
+                    continue;
+                }
+                AArch64_Register saved_reg = register_map[i];
                 if (UNIT_FAILED(emit_load_stack(compile_context, saved_reg,
                                                 save_slots[i]))) {
                     return _UNIT_FAIL;
@@ -391,17 +477,15 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_LOAD_STRING: {
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Register dst_reg;
+            AArch64_Operand dst = OP(destination);
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
                 dst_reg = REG_X16;
             }
 
-            /* LOAD_STRING pseudo-instruction: emits ADRP+ADD with relocation */
-            EMIT(MAKE_INST_2(AARCH64_LOAD_STRING, a64_reg(dst_reg),
-                             OP(argument_1)));
+            EMIT(a64_load_string(ctx, a64_reg(dst_reg), OP(argument_1)));
 
             if (dst.kind == A64_OPERAND_STACK) {
                 if (UNIT_FAILED(emit_store_stack(compile_context, dst_reg,
@@ -413,42 +497,30 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_EXIT: {
-            AARCH64_Operand exit_code = OP(destination);
-            AARCH64_Register exit_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, exit_code,
-                                               REG_X0, &exit_reg))) {
-                return _UNIT_FAIL;
-            }
+            AArch64_Operand exit_code = OP(destination);
+            ENSURE_IN_REGISTER(exit_code, REG_X0, exit_reg);
             if (exit_reg != REG_X0) {
-                EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(REG_X0),
-                                 a64_reg(exit_reg)));
+                EMIT(a64_mov_reg(ctx, a64_reg(REG_X0), a64_reg(exit_reg)));
             }
-            /* On AArch64 Linux: mov x8, #93 (exit); svc #0 */
-            /* On Apple: mov x16, #1 (exit); svc #0x80 */
             if (abi == UNIT_ABI_APPLE) {
                 if (UNIT_FAILED(emit_mov_imm(compile_context, REG_X16, 1))) {
                     return _UNIT_FAIL;
                 }
-                EMIT(MAKE_INST_1(AARCH64_SVC, a64_imm(0x80)));
+                EMIT(a64_svc(ctx, a64_imm(0x80)));
             } else {
                 if (UNIT_FAILED(emit_mov_imm(compile_context, REG_X8, 93))) {
                     return _UNIT_FAIL;
                 }
-                EMIT(MAKE_INST_1(AARCH64_SVC, a64_imm(0)));
+                EMIT(a64_svc(ctx, a64_imm(0)));
             }
             break;
         }
 
         case _UNIT_I_RETURN_VALUE: {
-            AARCH64_Operand src = OP(argument_1);
-            AARCH64_Register src_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, src, REG_X16,
-                                               &src_reg))) {
-                return _UNIT_FAIL;
-            }
+            AArch64_Operand src = OP(argument_1);
+            ENSURE_IN_REGISTER(src, REG_X16, src_reg);
             if (src_reg != REG_X0) {
-                EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(REG_X0),
-                                 a64_reg(src_reg)));
+                EMIT(a64_mov_reg(ctx, a64_reg(REG_X0), a64_reg(src_reg)));
             }
             /* Reserve 16 bytes for the epilogue (4 instructions) */
             UNIT_Size patch_offset = _UNIT_CodeBuffer_Reserve(
@@ -457,18 +529,19 @@ translate_operation(_UNIT_CompileContext *compile_context,
                                                     patch_offset))) {
                 return _UNIT_FAIL;
             }
-            EMIT(MAKE_INST_0(AARCH64_RET));
+            EMIT(a64_ret(ctx));
             break;
         }
 
         case _UNIT_I_LOAD_ARGUMENT: {
+            assert(operation->argument_1 != NULL);
             UNIT_Size arg_index = operation->argument_1->value;
             assert(arg_index < 8);
-            AARCH64_Register arg_reg = argument_registers[arg_index];
-            AARCH64_Operand dst = OP(destination);
+            AArch64_Register arg_reg = argument_registers[arg_index];
+            AArch64_Operand dst = OP(destination);
             if (dst.kind == A64_OPERAND_REGISTER) {
                 if (dst.reg != arg_reg) {
-                    EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(dst.reg),
+                    EMIT(a64_mov_reg(ctx, a64_reg(dst.reg),
                                      a64_reg(arg_reg)));
                 }
             } else if (dst.kind == A64_OPERAND_STACK) {
@@ -481,90 +554,69 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_COMPARE_EQUAL: {
-            AARCH64_Operand left = OP(argument_2);
-            AARCH64_Operand right = OP(argument_1);
+            AArch64_Operand left = OP(argument_2);
+            AArch64_Operand right = OP(argument_1);
 
-            AARCH64_Register left_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,
-                                               REG_X16, &left_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);
 
             if (right.kind == A64_OPERAND_IMMEDIATE
                 && right.immediate >= 0 && right.immediate < 4096) {
-                EMIT(MAKE_INST_2(AARCH64_CMP_IMM, a64_reg(left_reg), right));
+                EMIT(a64_cmp(ctx, a64_reg(left_reg), right));
             } else {
-                AARCH64_Register right_reg;
-                if (UNIT_FAILED(ensure_in_register(compile_context, right,
-                                                   REG_X17, &right_reg))) {
-                    return _UNIT_FAIL;
-                }
-                EMIT(MAKE_INST_2(AARCH64_CMP_REG, a64_reg(left_reg),
-                                 a64_reg(right_reg)));
+                ENSURE_IN_REGISTER(right, REG_X17, right_reg);
+                EMIT(a64_cmp(ctx, a64_reg(left_reg), a64_reg(right_reg)));
             }
             break;
         }
 
         case _UNIT_I_JUMP: {
-            AARCH64_Operand target = OP(argument_1);
-            EMIT(MAKE_INST_1(AARCH64_B, target));
+            AArch64_Operand target = OP(argument_1);
+            assert(target.kind == A64_OPERAND_IMMEDIATE);
+            EMIT(a64_b(ctx, target));
             break;
         }
 
         case _UNIT_I_JUMP_LABEL: {
-            AARCH64_Operand label = OP(destination);
-            EMIT(MAKE_INST_1(AARCH64_B_LABEL, label));
+            AArch64_Operand label = OP(destination);
+            assert(label.kind == A64_OPERAND_IMMEDIATE);
+            EMIT(a64_b_label(ctx, label));
             break;
         }
 
 #define JUMP_CONDITION(inst, cond_code)                                     \
         case inst: {                                                        \
-            AARCH64_Operand left = OP(argument_1);                          \
-            AARCH64_Operand right = OP(argument_2);                         \
-            AARCH64_Register left_reg;                                      \
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,       \
-                                               REG_X16, &left_reg))) {     \
-                return _UNIT_FAIL;                                          \
-            }                                                               \
+            AArch64_Operand left = OP(argument_1);                          \
+            AArch64_Operand right = OP(argument_2);                         \
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);                    \
             if (right.kind == A64_OPERAND_IMMEDIATE                         \
                 && right.immediate >= 0 && right.immediate < 4096) {        \
-                EMIT(MAKE_INST_2(AARCH64_CMP_IMM, a64_reg(left_reg),       \
-                                 right));                                   \
+                EMIT(a64_cmp(ctx, a64_reg(left_reg), right));               \
             } else {                                                        \
-                AARCH64_Register right_reg;                                  \
-                if (UNIT_FAILED(ensure_in_register(compile_context, right,  \
-                                                   REG_X17, &right_reg))) {\
-                    return _UNIT_FAIL;                                       \
-                }                                                           \
-                EMIT(MAKE_INST_2(AARCH64_CMP_REG, a64_reg(left_reg),       \
-                                 a64_reg(right_reg)));                      \
+                ENSURE_IN_REGISTER(right, REG_X17, right_reg);              \
+                EMIT(a64_cmp(ctx, a64_reg(left_reg),                        \
+                             a64_reg(right_reg)));                          \
             }                                                               \
-            EMIT(MAKE_INST_2(AARCH64_B_COND, OP(destination),               \
-                             a64_cond(cond_code)));                         \
+            EMIT(a64_b_cond(ctx, OP(destination), a64_cond(cond_code)));    \
             break;                                                          \
         }
 
-        JUMP_CONDITION(_UNIT_I_JUMP_IF_EQUAL, AARCH64_COND_EQ)
-        JUMP_CONDITION(_UNIT_I_JUMP_IF_NOT_EQUAL, AARCH64_COND_NE)
-        JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS, AARCH64_COND_LT)
-        JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS_EQUAL, AARCH64_COND_LE)
-        JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER, AARCH64_COND_GT)
-        JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER_EQUAL, AARCH64_COND_GE)
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_EQUAL, AArch64_COND_EQ)
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_NOT_EQUAL, AArch64_COND_NE)
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS, AArch64_COND_LT)
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS_EQUAL, AArch64_COND_LE)
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER, AArch64_COND_GT)
+        JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER_EQUAL, AArch64_COND_GE)
 
 #undef JUMP_CONDITION
 
         case _UNIT_I_ADD: {
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Operand left = OP(argument_1);
-            AARCH64_Operand right = OP(argument_2);
+            AArch64_Operand dst = OP(destination);
+            AArch64_Operand left = OP(argument_1);
+            AArch64_Operand right = OP(argument_2);
 
-            AARCH64_Register left_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,
-                                               REG_X16, &left_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);
 
-            AARCH64_Register dst_reg;
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
@@ -573,36 +625,26 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             if (right.kind == A64_OPERAND_IMMEDIATE
                 && right.immediate >= 0 && right.immediate < 4096) {
-                EMIT(MAKE_INST_3(AARCH64_ADD_IMM, a64_reg(dst_reg),
-                                 a64_reg(left_reg), right));
+                EMIT(a64_add(ctx, a64_reg(dst_reg), a64_reg(left_reg),
+                             right));
             } else {
-                AARCH64_Register right_reg;
-                if (UNIT_FAILED(ensure_in_register(compile_context, right,
-                                                   REG_X17, &right_reg))) {
-                    return _UNIT_FAIL;
-                }
-                EMIT(MAKE_INST_3(AARCH64_ADD_REG, a64_reg(dst_reg),
-                                 a64_reg(left_reg), a64_reg(right_reg)));
+                ENSURE_IN_REGISTER(right, REG_X17, right_reg);
+                EMIT(a64_add(ctx, a64_reg(dst_reg), a64_reg(left_reg),
+                             a64_reg(right_reg)));
             }
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_SUB: {
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Operand left = OP(argument_1);
-            AARCH64_Operand right = OP(argument_2);
+            AArch64_Operand dst = OP(destination);
+            AArch64_Operand left = OP(argument_1);
+            AArch64_Operand right = OP(argument_2);
 
-            AARCH64_Register left_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,
-                                               REG_X16, &left_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);
 
-            AARCH64_Register dst_reg;
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
@@ -611,139 +653,98 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             if (right.kind == A64_OPERAND_IMMEDIATE
                 && right.immediate >= 0 && right.immediate < 4096) {
-                EMIT(MAKE_INST_3(AARCH64_SUB_IMM, a64_reg(dst_reg),
-                                 a64_reg(left_reg), right));
+                EMIT(a64_sub(ctx, a64_reg(dst_reg), a64_reg(left_reg),
+                             right));
             } else {
-                AARCH64_Register right_reg;
-                if (UNIT_FAILED(ensure_in_register(compile_context, right,
-                                                   REG_X17, &right_reg))) {
-                    return _UNIT_FAIL;
-                }
-                EMIT(MAKE_INST_3(AARCH64_SUB_REG, a64_reg(dst_reg),
-                                 a64_reg(left_reg), a64_reg(right_reg)));
+                ENSURE_IN_REGISTER(right, REG_X17, right_reg);
+                EMIT(a64_sub(ctx, a64_reg(dst_reg), a64_reg(left_reg),
+                             a64_reg(right_reg)));
             }
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_MUL: {
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Operand left = OP(argument_1);
-            AARCH64_Operand right = OP(argument_2);
+            AArch64_Operand dst = OP(destination);
+            AArch64_Operand left = OP(argument_1);
+            AArch64_Operand right = OP(argument_2);
 
-            AARCH64_Register left_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,
-                                               REG_X16, &left_reg))) {
-                return _UNIT_FAIL;
-            }
-            AARCH64_Register right_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, right,
-                                               REG_X17, &right_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);
+            ENSURE_IN_REGISTER(right, REG_X17, right_reg);
 
-            AARCH64_Register dst_reg;
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
                 dst_reg = REG_X16;
             }
 
-            EMIT(MAKE_INST_3(AARCH64_MUL, a64_reg(dst_reg),
-                             a64_reg(left_reg), a64_reg(right_reg)));
+            EMIT(a64_mul(ctx, a64_reg(dst_reg), a64_reg(left_reg),
+                         a64_reg(right_reg)));
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_DIV: {
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Operand left = OP(argument_1);
-            AARCH64_Operand right = OP(argument_2);
+            AArch64_Operand dst = OP(destination);
+            AArch64_Operand left = OP(argument_1);
+            AArch64_Operand right = OP(argument_2);
 
-            AARCH64_Register left_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,
-                                               REG_X16, &left_reg))) {
-                return _UNIT_FAIL;
-            }
-            AARCH64_Register right_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, right,
-                                               REG_X17, &right_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);
+            ENSURE_IN_REGISTER(right, REG_X17, right_reg);
 
-            AARCH64_Register dst_reg;
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
                 dst_reg = REG_X16;
             }
 
-            EMIT(MAKE_INST_3(AARCH64_SDIV, a64_reg(dst_reg),
-                             a64_reg(left_reg), a64_reg(right_reg)));
+            EMIT(a64_sdiv(ctx, a64_reg(dst_reg), a64_reg(left_reg),
+                          a64_reg(right_reg)));
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_MOD: {
-            /* remainder = dividend - (dividend / divisor) * divisor
-             * AArch64: SDIV + MSUB */
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Operand left = OP(argument_1);
-            AARCH64_Operand right = OP(argument_2);
+            /* remainder = dividend - (dividend / divisor) * divisor */
+            AArch64_Operand dst = OP(destination);
+            AArch64_Operand left = OP(argument_1);
+            AArch64_Operand right = OP(argument_2);
 
-            AARCH64_Register left_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, left,
-                                               REG_X16, &left_reg))) {
-                return _UNIT_FAIL;
-            }
-            AARCH64_Register right_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, right,
-                                               REG_X17, &right_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(left, REG_X16, left_reg);
+            ENSURE_IN_REGISTER(right, REG_X17, right_reg);
 
-            AARCH64_Register dst_reg;
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
                 dst_reg = REG_X16;
             }
 
-            /* Use X8 as temp for quotient (it's a temp register) */
-            EMIT(MAKE_INST_3(AARCH64_SDIV, a64_reg(REG_X8),
-                             a64_reg(left_reg), a64_reg(right_reg)));
+            /* Use X8 as temp for quotient */
+            EMIT(a64_sdiv(ctx, a64_reg(REG_X8), a64_reg(left_reg),
+                          a64_reg(right_reg)));
             /* MSUB dst, quotient, divisor, dividend => dividend - quotient*divisor */
-            EMIT(MAKE_INST_4(AARCH64_MSUB, a64_reg(dst_reg),
-                             a64_reg(REG_X8), a64_reg(right_reg),
-                             a64_reg(left_reg)));
+            EMIT(a64_msub(ctx, a64_reg(dst_reg), a64_reg(REG_X8),
+                          a64_reg(right_reg), a64_reg(left_reg)));
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_CONVERT: {
-            AARCH64_Operand src = OP(argument_1);
+            AArch64_Operand src = OP(argument_1);
+            assert(operation->argument_2 != NULL);
             UNIT_IntegerType target = operation->argument_2->value;
 
-            AARCH64_Register src_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, src,
-                                               REG_X16, &src_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(src, REG_X16, src_reg);
 
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Register dst_reg;
+            AArch64_Operand dst = OP(destination);
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
@@ -752,56 +753,45 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             switch (target) {
                 case UNIT_TYPE_UINT8:
-                    EMIT(MAKE_INST_2(AARCH64_UXTB, a64_reg(dst_reg),
-                                     a64_reg(src_reg)));
+                    EMIT(a64_uxtb(ctx, a64_reg(dst_reg), a64_reg(src_reg)));
                     break;
                 case UNIT_TYPE_INT8:
-                    EMIT(MAKE_INST_2(AARCH64_SXTB, a64_reg(dst_reg),
-                                     a64_reg(src_reg)));
+                    EMIT(a64_sxtb(ctx, a64_reg(dst_reg), a64_reg(src_reg)));
                     break;
                 case UNIT_TYPE_UINT16:
-                    EMIT(MAKE_INST_2(AARCH64_UXTH, a64_reg(dst_reg),
-                                     a64_reg(src_reg)));
+                    EMIT(a64_uxth(ctx, a64_reg(dst_reg), a64_reg(src_reg)));
                     break;
                 case UNIT_TYPE_INT16:
-                    EMIT(MAKE_INST_2(AARCH64_SXTH, a64_reg(dst_reg),
-                                     a64_reg(src_reg)));
+                    EMIT(a64_sxth(ctx, a64_reg(dst_reg), a64_reg(src_reg)));
                     break;
                 case UNIT_TYPE_UINT32:
-                    EMIT(MAKE_INST_2(AARCH64_UXTW, a64_reg(dst_reg),
-                                     a64_reg(src_reg)));
+                    EMIT(a64_uxtw(ctx, a64_reg(dst_reg), a64_reg(src_reg)));
                     break;
                 case UNIT_TYPE_INT32:
-                    EMIT(MAKE_INST_2(AARCH64_SXTW, a64_reg(dst_reg),
-                                     a64_reg(src_reg)));
+                    EMIT(a64_sxtw(ctx, a64_reg(dst_reg), a64_reg(src_reg)));
                     break;
                 case UNIT_TYPE_UINT64:
                 case UNIT_TYPE_INT64:
                     if (dst_reg != src_reg) {
-                        EMIT(MAKE_INST_2(AARCH64_MOV_REG, a64_reg(dst_reg),
+                        EMIT(a64_mov_reg(ctx, a64_reg(dst_reg),
                                          a64_reg(src_reg)));
                     }
                     break;
             }
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_READ_BYTES: {
-            AARCH64_Operand addr = OP(argument_1);
+            AArch64_Operand addr = OP(argument_1);
+            assert(operation->argument_2 != NULL);
             UNIT_Size size = operation->argument_2->value;
 
-            AARCH64_Register addr_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, addr,
-                                               REG_X16, &addr_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(addr, REG_X16, addr_reg);
 
-            AARCH64_Operand dst = OP(destination);
-            AARCH64_Register dst_reg;
+            AArch64_Operand dst = OP(destination);
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
@@ -810,64 +800,48 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             switch (size) {
                 case 1:
-                    EMIT(MAKE_INST_2(AARCH64_LDRB, a64_reg(dst_reg),
-                                     a64_reg(addr_reg)));
+                    EMIT(a64_ldrb(ctx, a64_reg(dst_reg), a64_reg(addr_reg)));
                     break;
                 case 2:
-                    EMIT(MAKE_INST_2(AARCH64_LDRH, a64_reg(dst_reg),
-                                     a64_reg(addr_reg)));
+                    EMIT(a64_ldrh(ctx, a64_reg(dst_reg), a64_reg(addr_reg)));
                     break;
                 case 4:
-                    EMIT(MAKE_INST_2(AARCH64_LDRW, a64_reg(dst_reg),
-                                     a64_reg(addr_reg)));
+                    EMIT(a64_ldrw(ctx, a64_reg(dst_reg), a64_reg(addr_reg)));
                     break;
                 case 8:
-                    EMIT(MAKE_INST_2(AARCH64_LDR, a64_reg(dst_reg),
-                                     a64_indirect(addr_reg)));
+                    EMIT(a64_ldr(ctx, a64_reg(dst_reg),
+                                 a64_indirect(addr_reg)));
                     break;
                 default:
                     _UNIT_Unreachable();
             }
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
 
         case _UNIT_I_WRITE_BYTES: {
-            AARCH64_Operand addr = OP(destination);
-            AARCH64_Operand value = OP(argument_1);
+            AArch64_Operand addr = OP(destination);
+            AArch64_Operand value = OP(argument_1);
+            assert(operation->argument_2 != NULL);
             UNIT_Size size = operation->argument_2->value;
 
-            AARCH64_Register addr_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, addr,
-                                               REG_X16, &addr_reg))) {
-                return _UNIT_FAIL;
-            }
-
-            AARCH64_Register val_reg;
-            if (UNIT_FAILED(ensure_in_register(compile_context, value,
-                                               REG_X17, &val_reg))) {
-                return _UNIT_FAIL;
-            }
+            ENSURE_IN_REGISTER(addr, REG_X16, addr_reg);
+            ENSURE_IN_REGISTER(value, REG_X17, val_reg);
 
             switch (size) {
                 case 1:
-                    EMIT(MAKE_INST_2(AARCH64_STRB, a64_reg(val_reg),
-                                     a64_reg(addr_reg)));
+                    EMIT(a64_strb(ctx, a64_reg(val_reg), a64_reg(addr_reg)));
                     break;
                 case 2:
-                    EMIT(MAKE_INST_2(AARCH64_STRH, a64_reg(val_reg),
-                                     a64_reg(addr_reg)));
+                    EMIT(a64_strh(ctx, a64_reg(val_reg), a64_reg(addr_reg)));
                     break;
                 case 4:
-                    EMIT(MAKE_INST_2(AARCH64_STRW, a64_reg(val_reg),
-                                     a64_reg(addr_reg)));
+                    EMIT(a64_strw(ctx, a64_reg(val_reg), a64_reg(addr_reg)));
                     break;
                 case 8:
-                    EMIT(MAKE_INST_2(AARCH64_STR, a64_reg(val_reg),
-                                     a64_indirect(addr_reg)));
+                    EMIT(a64_str(ctx, a64_reg(val_reg),
+                                 a64_indirect(addr_reg)));
                     break;
                 default:
                     _UNIT_Unreachable();
@@ -876,23 +850,20 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_ADDRESS_OF: {
-            AARCH64_Operand src = OP(argument_1);
-            AARCH64_Operand dst = OP(destination);
+            AArch64_Operand src = OP(argument_1);
+            AArch64_Operand dst = OP(destination);
             assert(src.kind == A64_OPERAND_STACK);
 
-            AARCH64_Register dst_reg;
+            AArch64_Register dst_reg;
             if (dst.kind == A64_OPERAND_REGISTER) {
                 dst_reg = dst.reg;
             } else {
                 dst_reg = REG_X16;
             }
 
-            /* add Xd, sp, #offset */
-            EMIT(MAKE_INST_2(AARCH64_ADD_SP_IMM, a64_reg(dst_reg), src));
+            EMIT(a64_add_sp_imm(ctx, a64_reg(dst_reg), src));
 
-            if (UNIT_FAILED(writeback_if_stack(compile_context, dst, dst_reg))) {
-                return _UNIT_FAIL;
-            }
+            WRITEBACK_IF_STACK(dst, dst_reg);
             break;
         }
     }
@@ -911,7 +882,7 @@ patch_epilogues(_UNIT_CompileContext *compile_context,
     UNIT_Size size = _UNIT_SizeVector_SIZE(epilogue_patches);
     for (UNIT_Size index = 0; index < size; ++index) {
         UNIT_Size epilogue_offset = _UNIT_SizeVector_GET(epilogue_patches, index);
-        AARCH64_PatchEpilogue(compile_context, epilogue_offset, frame_size);
+        AArch64_PatchEpilogue(compile_context, epilogue_offset, frame_size);
     }
 }
 
@@ -920,11 +891,10 @@ _UNIT_AARCH64_Compile(_UNIT_Translation *translation,
                       _UNIT_CompileContext *compile_context,
                       UNIT_ABI abi)
 {
-    /* Reserve 16 bytes for the prologue (4 ARM64 instructions):
-     * stp x29, x30, [sp, #-frame]!
-     * mov x29, sp
-     * sub sp, sp, #extra  (or NOP)
-     * NOP */
+    assert(translation != NULL);
+    assert(compile_context != NULL);
+
+    /* Reserve 16 bytes for the prologue (4 ARM64 instructions) */
     UNIT_Size prologue_offset = _UNIT_CodeBuffer_Reserve(&compile_context->buffer, 16);
 
     _UNIT_SizeVector epilogue_patches;
@@ -933,7 +903,6 @@ _UNIT_AARCH64_Compile(_UNIT_Translation *translation,
         return _UNIT_FAIL;
     }
 
-    assert(translation != NULL);
     UNIT_Size blocks_size = _UNIT_Vector_SIZE(&translation->blocks);
     for (UNIT_Size block_index = 0; block_index < blocks_size; ++block_index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
@@ -953,9 +922,9 @@ _UNIT_AARCH64_Compile(_UNIT_Translation *translation,
     }
 
     UNIT_Size frame_size = _UNIT_StackFrame_ComputeSize(&compile_context->stack_frame);
-    AARCH64_PatchPrologue(compile_context, prologue_offset, frame_size);
+    AArch64_PatchPrologue(compile_context, prologue_offset, frame_size);
     patch_epilogues(compile_context, &epilogue_patches, frame_size);
-    AARCH64_PatchJumps(compile_context);
+    AArch64_PatchJumps(compile_context);
 
     _UNIT_SizeVector_Clear(&epilogue_patches);
     return _UNIT_OK;

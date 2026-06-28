@@ -85,8 +85,22 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         return NULL;
     }
 
+    int8_t num_registers;
+    switch (UNIT_Platform_GET_ARCH(platform)) {
+        case UNIT_ARCH_AMD64:
+            num_registers = 8;
+            break;
+        case UNIT_ARCH_AARCH64:
+            num_registers = 17;
+            break;
+        default:
+            _UNIT_SetError(context, UNIT_ERROR_UNSUPPORTED_PLATFORM, "Unsupported architecture");
+            goto error;
+    }
+
     if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
-                                                        &compiled_procedure->_compile_context, 8))) {
+                                                        &compiled_procedure->_compile_context,
+                                                        num_registers))) {
         goto error;
     }
 
