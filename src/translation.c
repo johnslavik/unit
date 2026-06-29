@@ -490,13 +490,13 @@ typedef struct {
 } LocalVariables;
 
 static bool
-compare_int32_deref(void *ptr_a, void *ptr_b)
+compare_int32_deref(const void *ptr_a, const void *ptr_b)
 {
     return *((int32_t *)ptr_a) == *((int32_t *)ptr_b);
 }
 
 static UNIT_Size
-hash_int32_deref(void *key)
+hash_int32_deref(const void *key)
 {
     return (UNIT_Size)(*(int32_t *)key);
 }

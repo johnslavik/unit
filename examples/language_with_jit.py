@@ -1,12 +1,14 @@
 from collections.abc import Iterable, Iterator, Sequence
-from typing import Any, Literal, overload
+import ctypes
+from typing import Any, ClassVar, Literal, overload
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from queue import LifoQueue
 import io
 from enum import Enum, auto
 import operator as py_operators
-
+import unit
+import contextvars
 
 class OpCode(Enum):
     LOAD_CONST = auto()
@@ -43,6 +45,9 @@ class ASTNode(ABC):
     @abstractmethod
     def codegen(self) -> Iterator[Code]: ...
 
+    @abstractmethod
+    def codegen_unit(self, procedure: unit.Procedure) -> None: ...
+
 
 class Expression(ASTNode):
     @abstractmethod
@@ -55,6 +60,13 @@ class Constant[T](Expression):
 
     def codegen(self) -> Iterator[Instruction]:
         yield Instruction(OpCode.LOAD_CONST, self.value)
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        if isinstance(self.value, int):
+            procedure.load_integer(self.value)
+        else:
+            assert isinstance(self.value, str)
+            procedure.load_string(self.value)
 
 
 @dataclass(slots=True)
@@ -69,6 +81,19 @@ class FunctionCall(Expression):
 
         yield Instruction(OpCode.CALL, len(self.args))
 
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        interpreter = Interpreter.current()
+        function = Function.current()
+
+        for argument in self.args:
+            argument.codegen_unit(procedure)
+
+        trampoline = interpreter.get_trampoline(self.name)
+        function.trampolines[self.name] = trampoline
+
+        procedure.call_name(self.name, len(self.args))
+
+
 
 @dataclass(slots=True)
 class BinaryOperator(Expression):
@@ -80,6 +105,18 @@ class BinaryOperator(Expression):
         yield from self.left.codegen()
         yield from self.right.codegen()
         yield Instruction(OpCode.BINARY_OP, self.operator)
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        operators = {
+            '+': procedure.add,
+            '-': procedure.subtract,
+            '*': procedure.multiply,
+            '/': procedure.divide,
+        }
+
+        self.left.codegen_unit(procedure)
+        self.right.codegen_unit(procedure)
+        operators[self.operator]()
 
 
 @dataclass(slots=True)
@@ -93,6 +130,24 @@ class Compare(Expression):
         yield from self.right.codegen()
         yield Instruction(OpCode.COMPARE, self.operator)
 
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        operators = {
+            '==': procedure.compare_equal,
+            '!=': procedure.compare_not_equal,
+            '>': procedure.compare_greater,
+            '>=': procedure.compare_greater_equal,
+            '<': procedure.compare_less,
+            '<=': procedure.compare_less_equal
+        }
+
+        self.left.codegen_unit(procedure)
+        self.right.codegen_unit(procedure)
+        operators[self.operator]()
+
+# TODO: This is horrible
+names: dict[str, int] = {}
+next_name_id = 0
+
 
 @dataclass(slots=True)
 class Name(Expression):
@@ -100,6 +155,9 @@ class Name(Expression):
 
     def codegen(self) -> Iterator[Instruction]:
         yield Instruction(OpCode.LOAD_NAME, self.name)
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        procedure.load_local(names[self.name])
 
 
 class Statement(ASTNode):
@@ -114,6 +172,10 @@ class Body(ASTNode):
         for statement in self.statements:
             yield from statement.codegen()
 
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        for statement in self.statements:
+            statement.codegen_unit(procedure)
+
 
 @dataclass(slots=True)
 class InlineExpression(Statement):
@@ -122,6 +184,10 @@ class InlineExpression(Statement):
     def codegen(self) -> Iterator[Instruction]:
         yield from self.expression.codegen()
         yield Instruction(OpCode.POP_TOP)
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        self.expression.codegen_unit(procedure)
+        procedure.pop()
 
 
 @dataclass(slots=True)
@@ -133,12 +199,59 @@ class Let(Statement):
         yield from self.value.codegen()
         yield Instruction(OpCode.STORE_NAME, self.name)
 
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        global next_name_id
+        names[self.name] = next_name_id
+        procedure.store_local(next_name_id)
+        next_name_id += 1
+
 
 @dataclass(slots=True)
 class Function:
     name: str
     parameters: Sequence[str]
     body: Iterable[Code]
+    original: FunctionDefinition
+    observed_args: dict[tuple[Any, ...], int] = field(default_factory=dict, init=False)
+    specialized: dict[tuple[Any, ...], unit.procedure.ExecutableBuffer] = field(default_factory=dict, init=False)
+    trampolines: dict[str, ctypes._CFunctionType] = field(default_factory=dict, init=False)
+
+    CURRENT_FUNCTION: ClassVar[contextvars.ContextVar] = contextvars.ContextVar("CURRENT_FUNCTION")
+
+    @classmethod
+    def current(cls) -> Function:
+        return cls.CURRENT_FUNCTION.get()
+
+    def specialized_name(self, args: tuple[Any, ...]) -> str:
+        return f"{self.name}${'_'.join(str(arg) for arg in args)}"
+
+    def specialize(self, arguments: tuple[Any, ...]) -> unit.ExecutableBuffer:
+        procedure = unit.Procedure(self.specialized_name(arguments))
+        global next_name_id
+        for name, value in zip(self.parameters, arguments):
+            Constant(value).codegen_unit(procedure)
+            names[name] = next_name_id
+            procedure.store_local(next_name_id)
+            next_name_id += 1
+
+        with self.CURRENT_FUNCTION.set(self):
+            self.original.body.codegen_unit(procedure)
+
+        procedure.optimize()
+        compiled = procedure.compile()
+        print(f"SPECIALIZED {self.name}{arguments}:")
+        print(compiled.translation_text())
+
+        trampoline_addresses: dict[str, int] = {}
+        for name, trampoline in self.trampolines.items():
+            address = ctypes.cast(trampoline, ctypes.c_void_p).value
+            assert address is not None
+            trampoline_addresses[name] = address
+
+        executable = compiled.jit(extra_symbols=trampoline_addresses)
+
+        self.specialized[arguments] = executable
+        return executable
 
 
 @dataclass(slots=True)
@@ -152,8 +265,12 @@ class FunctionDefinition(Statement):
         for instruction in self.body.codegen():
             code.append(instruction)
 
-        function = Function(self.name, self.parameters, code)
+        function = Function(self.name, self.parameters, code, self)
         yield Instruction(OpCode.STORE_FUNCTION, function)
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        # Nothing to generate here
+        pass
 
 
 @dataclass(slots=True)
@@ -164,6 +281,11 @@ class Print(Statement):
         yield from self.value.codegen()
         yield Instruction(OpCode.PRINT)
 
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        procedure.load_string("%d")
+        self.value.codegen_unit(procedure)
+        procedure.call_name("printf", 2)
+
 
 @dataclass(slots=True)
 class Return(Statement):
@@ -172,6 +294,10 @@ class Return(Statement):
     def codegen(self) -> Iterator[Instruction]:
         yield from self.value.codegen()
         yield Instruction(OpCode.RETURN)
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        self.value.codegen_unit(procedure)
+        procedure.return_value()
 
 
 @dataclass(slots=True)
@@ -195,6 +321,22 @@ class If(Statement):
         yield from self.if_true.codegen()
         yield end
 
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        if_true = procedure.create_jump_label("if_true")
+        end = procedure.create_jump_label("end")
+
+        self.condition.codegen_unit(procedure)
+        procedure.jump_if_true(if_true)
+
+        if self.if_false is not None:
+            self.if_false.codegen_unit(procedure)
+
+        procedure.jump_to(end)
+
+        procedure.use_label(if_true)
+        self.if_true.codegen_unit(procedure)
+        procedure.use_label(end)
+
 
 @dataclass(slots=True)
 class Module:
@@ -203,6 +345,10 @@ class Module:
     def codegen(self) -> Iterator[Code]:
         for statement in self.body:
             yield from statement.codegen()
+
+    def codegen_unit(self, procedure: unit.Procedure) -> None:
+        for statement in self.body:
+            statement.codegen_unit(procedure)
 
 
 def tokenize(source: str) -> Iterator[str]:
@@ -434,12 +580,55 @@ class Stack[T]:
 
 
 class Interpreter:
+    CURRENT_INTERPRETER = contextvars.ContextVar("CURRENT_INTERPRETER")
+
     def __init__(self, code: Iterable[Code]) -> None:
         self.code = list(code)
         self.variables: dict[str, Any] = {}
         self.functions: dict[str, Function] = {}
         self.stack = Stack[Any]()
         self._index = 0
+
+    @classmethod
+    def current(cls) -> Interpreter:
+        return cls.CURRENT_INTERPRETER.get()
+
+    def get_trampoline(self, name: str) -> ctypes._CFunctionType:
+        function = self.functions[name]
+        parameter_types = [ctypes.c_int64 for _ in function.parameters]
+
+        @ctypes.CFUNCTYPE(ctypes.c_int64, *parameter_types)
+        def trampoline_call(*args):
+            specialized = function.specialized.get(args)
+            if specialized is not None:
+                return specialized()
+
+            return self.call(function, args)
+
+        return trampoline_call
+
+    def call(self, function: Function, arguments: tuple[Any, ...]) -> None:
+        if arguments in function.observed_args:
+            function.observed_args[arguments] += 1
+            if function.observed_args[arguments] == 3:
+                function.specialize(arguments)
+        else:
+            function.observed_args[arguments] = 1
+
+        interpreter = Interpreter([inst for inst in function.body])
+
+        # To allow recursive calls:
+        interpreter.functions[function.name] = function
+
+        for parameter, value in zip(function.parameters, arguments):
+            assert parameter not in interpreter.variables
+            interpreter.variables[parameter] = value
+
+        interpreter.interpret()
+        if interpreter.stack.is_empty():
+            self.stack.push(None)
+        else:
+            self.stack.push(interpreter.stack.pop())
 
     def interpret_instruction(self, instruction: Instruction) -> None:
         opcode = instruction.opcode
@@ -485,20 +674,13 @@ class Interpreter:
                     f"expected {num_parameters} arguments to {function.name} (got {len(arguments)})"
                 )
 
-            interpreter = Interpreter([inst for inst in function.body])
+            arguments = tuple(arguments)
+            specialized = function.specialized.get(arguments)
+            if specialized is not None:
+                self.stack.push(specialized())
+                return
 
-            # To allow recursive calls:
-            interpreter.functions[function.name] = function
-
-            for parameter, value in zip(function.parameters, arguments):
-                assert parameter not in interpreter.variables
-                interpreter.variables[parameter] = value
-
-            interpreter.interpret()
-            if interpreter.stack.is_empty():
-                self.stack.push(None)
-            else:
-                self.stack.push(interpreter.stack.pop())
+            self.call(function, arguments)
         elif opcode == OpCode.POP_TOP:
             assert oparg is None
             self.stack.pop()
@@ -559,7 +741,8 @@ class Interpreter:
         while self._index < len(self.code):
             code = self.code[self._index]
             if isinstance(code, Instruction):
-                self.interpret_instruction(code)
+                with self.CURRENT_INTERPRETER.set(self):
+                    self.interpret_instruction(code)
             else:
                 assert isinstance(code, JumpLabel)
 
